@@ -1,0 +1,105 @@
+================================================================================
+          SPESIFIKASI TEKNIS & FITUR RUNNING PROJECT (DEVELOPER GUIDE)
+================================================================================
+Project Name : Global Supply Chain Risk Intelligence Platform
+               (Platform Monitoring Risiko Rantai Pasok Global Berbasis Multi-API)
+Architecture : Monolith (Laravel Blade + REST API terintegrasi dalam 1 codebase)
+Base Stack   : PHP 8.x / Laravel, MySQL, Bootstrap 5, AJAX (Vanilla JS/Fetch API)
+Visualisasi  : Chart.js & Leaflet.js
+Sifat API    : Menggunakan API Publik Gratis (Tanpa API Key Berbayar)
+
+--------------------------------------------------------------------------------
+1. DESKRIPSI UTAMA & STUDI KASUS
+--------------------------------------------------------------------------------
+Sistem ini dirancang untuk membantu perusahaan/user yang ingin mengimpor barang 
+dari berbagai negara dengan memantau risiko logistik secara real-time. Sistem 
+harus dapat mendeteksi cuaca buruk, perubahan nilai tukar mata uang, inflasi, 
+dan sentimen geopolitik, lalu merangkumnya ke dalam satu dashboard interaktif.
+
+--------------------------------------------------------------------------------
+2. STRUKTUR DATABASE (ESTIMASI 15-20 TABEL)
+--------------------------------------------------------------------------------
+Developer wajib menyediakan tabel-tabel utama berikut (termasuk Migration & Seeder):
+- users            : Data otentikasi user dan admin.
+- countries        : Data dasar negara yang dipantau.
+- ports            : Koordinat & info pelabuhan dunia (Source: World Port Index).
+- risk_scores      : Log riwayat kalkulasi skor risiko tiap negara.
+- watchlists       : Fitur bookmark negara favorit oleh user.
+- news_cache       : Caching artikel berita dari GNews API (untuk efisiensi kuota).
+- articles         : Modul artikel analisis buatan Admin.
+- positive_words   : Kamus kata positif untuk Sentiment Analysis (id, word).
+- negative_words   : Kamus kata negatif untuk Sentiment Analysis (id, word).
+
+--------------------------------------------------------------------------------
+3. INTEGRASI API EKSTERNAL (WAJIB MENGGUNAKAN LARAVEL HTTP CLIENT)
+--------------------------------------------------------------------------------
+Untuk efisiensi kuota dan kecepatan loading, hit ke API eksternal wajib dilakukan 
+melalui Backend Laravel, kemudian di-cache atau di-passing ke frontend.
+1. Open-Meteo API   : Mengambil data temperatur, curah hujan, kecepatan angin, badai.
+2. World Bank API   : Mengambil tren ekonomi makro (GDP, Inflasi, Populasi, Ekspor/Impor).
+3. REST Countries   : Informasi umum (Mata uang, wilayah, bahasa resmi).
+4. ExchangeRate API : Kurs mata uang real-time.
+5. World Port Index : Dataset publik lokasi pelabuhan untuk disuntik ke DB lokal.
+6. GNews API        : Mengambil berita kategori Logistics, Trade, Shipping, Economy.
+7. OpenStreetMap    : Base layer tile untuk Leaflet.js.
+
+--------------------------------------------------------------------------------
+4. DAFTAR REST API INTERNAL YANG WAJIB DISEDIAKAN (BACKEND)
+--------------------------------------------------------------------------------
+Developer harus menyediakan endpoint API internal berikut dalam format JSON 
+untuk dikonsumsi oleh frontend menggunakan AJAX Fetch API:
+- GET /api/countries -> Mengembalikan daftar negara & info makro.
+- GET /api/risk      -> Mengembalikan skor risiko terbaru negara tertentu.
+- GET /api/ports     -> Mengembalikan data koordinat pelabuhan untuk peta.
+- GET /api/news      -> Mengembalikan data berita terbaru beserta skor sentimennya.
+- GET /api/currency  -> Mengembalikan data kurs real-time & tren mata uang.
+
+--------------------------------------------------------------------------------
+5. LOGIKA DATA SCIENCE / ALGORITMA BACKEND (TANPA API BERBAYAR)
+--------------------------------------------------------------------------------
+A. Lexicon-Based Sentiment Analysis (PHP)
+   Sistem harus melakukan scanning teks berita yang didapat dari GNews API 
+   berdasarkan tabel `positive_words` dan `negative_words`. 
+   Contoh Logika:
+   - Jika teks mengandung lebih banyak kata negatif (misal: war, crisis, inflation),
+     maka output berita berstatus "Negative".
+   - Tampilkan rasio persentase akhir (Positive %, Neutral %, Negative %).
+
+B. Supply Chain Risk Prediction (Weighted Risk Model)
+   Sistem harus menghitung nilai total risiko (skala 0-100) berdasarkan formula bobot:
+   - Weather Risk       : Bobot 30%
+   - Inflation Risk     : Bobot 20%
+   - Political/News Risk: Bobot 40%
+   - Currency Risk      : Bobot 10%
+   Output Kategori: <30 (Low Risk), 30-60 (Medium Risk), >60 (High Risk).
+
+--------------------------------------------------------------------------------
+6. IMPLEMENTASI FRONTEND UI (SIMPLE MONOLITH METHOD)
+--------------------------------------------------------------------------------
+- UI menggunakan Bootstrap 5 (Panggil via CDN, tidak perlu npm/vite compiler).
+- Interaksi halaman wajib menggunakan Vanilla JavaScript (ES6 Fetch API) tanpa jQuery.
+- Library Visualisasi (Panggil via CDN):
+  * Leaflet.js -> Menampilkan peta dunia interaktif dengan marker pelabuhan 
+                  dan visualisasi cuaca buruk.
+  * Chart.js   -> Menampilkan grafik garis untuk tren GDP, Inflasi, dan Kurs Mata Uang.
+
+7. FITUR UTAMA DASHBOARD USER & ADMIN
+--------------------------------------------------------------------------------
+1. Global Country Dashboard  : Pilih negara -> Muncul ringkasan data makro & cuaca.
+2. Risk Scoring Engine       : Tampilan visual skor risiko hasil algoritma weighted.
+3. Global Weather Monitoring : Peta Leaflet khusus pemantauan cuaca buruk dunia.
+4. Currency Impact Dashboard : Grafik tren fluktuasi kurs mata uang (Chart.js).
+5. News Intelligence         : Daftar berita ekonomi & logistik lengkap dengan sentimen teks.
+6. Port Location Dashboard   : Fitur pencarian lokasi pelabuhan dunia interaktif.
+7. Data Visualization        : Kumpulan chart tren makro ekonomi beberapa tahun terakhir.
+8. Country Comparison Engine : Fitur komparasi "Negara A vs Negara B" secara berdampingan.
+9. Favorite Monitoring List  : Fitur simpan/bookmark negara ke dalam watchlist user.
+10. Admin Dashboard          : Manajemen user, manajemen data pelabuhan, & posting artikel.
+
+================================================================================
+DELIVERABLES & DEPLOYMENT:
+- Source code lengkap berbasis Framework Laravel.
+- File SQL / Seeder Database MySQL untuk test awal.
+- Setup file Dockerfile / docker-compose.yml (Opsional) untuk kemudahan deployment.
+- Dokumentasi API internal singkat.
+================================================================================
