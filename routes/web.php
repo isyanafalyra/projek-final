@@ -17,4 +17,16 @@ Route::middleware('auth')->group(function () {
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 });
 
+use App\Services\RiskIntelligenceService;
+
+Route::get('/test-api', function (RiskIntelligenceService $service) {
+    return response()->json([
+        'weather' => $service->getWeatherData(51.8850, 4.2867), // Rotterdam
+        'macro' => $service->getMacroData('NL'),
+        'country' => $service->getCountryDetails('NL'),
+        'rates' => $service->getExchangeRates('USD'),
+        'news' => $service->getNewsData('logistik')
+    ]);
+});
+
 require __DIR__.'/auth.php';
