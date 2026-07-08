@@ -12,4 +12,11 @@ class RiskScore extends Model
     {
         return $this->belongsTo(Country::class);
     }
+
+    protected function casts(): array
+    {
+        return [
+            'calculated_at' => 'datetime',
+        ];
+    }
 }

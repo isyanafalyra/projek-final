@@ -17,16 +17,14 @@ Route::middleware('auth')->group(function () {
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 });
 
-use App\Services\RiskIntelligenceService;
+use App\Http\Controllers\Api\InternalApiController;
 
-Route::get('/test-api', function (RiskIntelligenceService $service) {
-    return response()->json([
-        'weather' => $service->getWeatherData(51.8850, 4.2867), // Rotterdam
-        'macro' => $service->getMacroData('NL'),
-        'country' => $service->getCountryDetails('NL'),
-        'rates' => $service->getExchangeRates('USD'),
-        'news' => $service->getNewsData('logistik')
-    ]);
+Route::prefix('api')->group(function () {
+    Route::get('/countries', [InternalApiController::class, 'countries']);
+    Route::get('/risk', [InternalApiController::class, 'risk']);
+    Route::get('/ports', [InternalApiController::class, 'ports']);
+    Route::get('/news', [InternalApiController::class, 'news']);
+    Route::get('/currency', [InternalApiController::class, 'currency']);
 });
 
 require __DIR__.'/auth.php';
