@@ -18,8 +18,8 @@ return new class extends Migration
             $table->decimal('rate', 15, 6);
             $table->date('recorded_date');
             $table->timestamps();
-
-            $table->index(['base_currency', 'target_currency', 'recorded_date'], 'curr_hist_idx');
+            
+            $table->unique(['base_currency', 'target_currency', 'recorded_date'], 'base_target_date_unique');
         });
     }
 

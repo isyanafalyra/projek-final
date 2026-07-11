@@ -17,30 +17,6 @@ Global Supply Chain Risk Intelligence Platform adalah platform berbasis web untu
 
 ---
 
-## Skema Database (18 Tabel)
-
-Sistem ini memiliki total **18 tabel** di database untuk mendukung semua fitur analisis, audit, dan skalabilitas data:
-1.  `users` - Data pengguna terdaftar (menyimpan flag `is_admin`).
-2.  `password_reset_tokens` - Token reset kata sandi (default Laravel).
-3.  `sessions` - Penyimpanan sesi otentikasi aktif (default Laravel).
-4.  `cache` - Penyimpanan cache sistem (default Laravel).
-5.  `cache_locks` - Manajemen lock cache (default Laravel).
-6.  `jobs` - Antrean job sistem (default Laravel).
-7.  `job_batches` - Batching job sistem (default Laravel).
-8.  `failed_jobs` - Pencatatan job antrean yang gagal (default Laravel).
-9.  `countries` - Informasi master negara (nama, ISO code, region).
-10. `ports` - Lokasi pelabuhan kargo kontainer global beserta koordinat geografis.
-11. `risk_scores` - Log riwayat kalkulasi skor risiko tiap negara.
-12. `watchlists` - Daftar pantau (bookmark) negara favorit pilihan pengguna.
-13. `news_caches` - Caching artikel berita dari GNews API guna efisiensi kuota.
-14. `articles` - Artikel riset dan analisis logistik yang diposting oleh admin.
-15. `positive_words` - Kamus leksikon kata berunsur positif untuk analisis sentimen berita.
-16. `negative_words` - Kamus leksikon kata berunsur negatif untuk analisis sentimen berita.
-17. `activity_logs` - Audit trail untuk melacak aktivitas CRUD yang dilakukan oleh administrator (tambah/edit/hapus port, artikel, role).
-18. `currency_histories` - Penyimpanan historis pergerakan nilai tukar mata uang harian.
-
----
-
 ## Arsitektur & Logika Data Science
 
 ### A. Weighted Risk Model (Kalkulasi Skor Risiko)

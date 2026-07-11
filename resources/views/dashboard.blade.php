@@ -87,6 +87,9 @@
                                 <i class="fa-solid fa-earth-americas text-info me-2"></i>Peta Logistik & Cuaca Dunia
                             </h5>
                             <div class="d-flex gap-2">
+                                <select id="mapCountrySelect" class="form-select form-select-sm form-control-custom" style="max-width: 200px;">
+                                    <option value="" disabled selected>Pilih Negara...</option>
+                                </select>
                                 <input type="text" id="mapSearchInput" class="form-control form-control-sm form-control-custom" placeholder="Cari Pelabuhan..." style="max-width: 220px;">
                                 <button id="mapSearchBtn" class="btn btn-sm btn-primary-custom"><i class="fa-solid fa-magnifying-glass"></i></button>
                             </div>
@@ -571,6 +574,9 @@
                 document.getElementById('mapSearchInput').addEventListener('keyup', (e) => {
                     if (e.key === 'Enter') handleMapSearch();
                 });
+                document.getElementById('mapCountrySelect').addEventListener('change', (e) => {
+                    handleMapCountryChange(e.target.value);
+                });
             });
 
             // --- TABS RE-RENDER MAP BUG FIX ---
@@ -662,16 +668,23 @@
                 const select = document.getElementById('countrySelect');
                 const selectA = document.getElementById('compareSelectA');
                 const selectB = document.getElementById('compareSelectB');
+                const mapSelect = document.getElementById('mapCountrySelect');
 
                 select.innerHTML = '';
                 selectA.innerHTML = '<option value="" disabled selected>Pilih Negara A</option>';
                 selectB.innerHTML = '<option value="" disabled selected>Pilih Negara B</option>';
+                if (mapSelect) {
+                    mapSelect.innerHTML = '<option value="" disabled selected>Pilih Negara...</option>';
+                }
 
                 countriesList.forEach(country => {
                     const optionHtml = `<option value="${country.iso_code}">${country.name} (${country.iso_code})</option>`;
                     select.insertAdjacentHTML('beforeend', optionHtml);
                     selectA.insertAdjacentHTML('beforeend', optionHtml);
                     selectB.insertAdjacentHTML('beforeend', optionHtml);
+                    if (mapSelect) {
+                        mapSelect.insertAdjacentHTML('beforeend', optionHtml);
+                    }
                 });
             }
 
@@ -821,6 +834,80 @@
                 } else {
                     alert(`Pelabuhan matching "${query}" tidak ditemukan.`);
                 }
+            }
+
+            // Handle Country Change in Map View
+            function handleMapCountryChange(isoCode) {
+                if (!isoCode) return;
+                
+                // Fetch ports to find the one matching the country code
+                fetch('/api/ports')
+                    .then(res => res.json())
+                    .then(response => {
+                        if (response.status === 'success') {
+                            const port = response.data.find(p => p.country_code === isoCode);
+                            if (port) {
+                                // Find the Leaflet marker corresponding to this port
+                                let foundMarker = null;
+                                portMarkersGroup.eachLayer(layer => {
+                                    const latlng = layer.getLatLng();
+                                    if (Math.abs(latlng.lat - port.lat) < 0.01 && Math.abs(latlng.lng - port.lng) < 0.01) {
+                                        foundMarker = layer;
+                                    }
+                                });
+
+                                if (foundMarker) {
+                                    leafletMap.setView(foundMarker.getLatLng(), 6);
+                                    foundMarker.openPopup();
+                                    fetchPortWeather(port);
+                                } else {
+                                    const country = countriesList.find(c => c.iso_code === isoCode);
+                                    if (country) {
+                                        const capitalCoords = {
+                                            'ID': [-6.2088, 106.8456],
+                                            'SG': [1.3521, 103.8198],
+                                            'CN': [39.9042, 116.4074],
+                                            'US': [38.9072, -77.0369],
+                                            'NL': [52.3676, 4.9041],
+                                            'JP': [35.6762, 139.6503],
+                                            'DE': [52.5200, 13.4050],
+                                            'AU': [-35.2809, 149.1300],
+                                            'GB': [51.5074, -0.1278],
+                                            'IN': [28.6139, 77.2090],
+                                            'MY': [3.1390, 101.6869],
+                                            'KR': [37.5665, 126.9780],
+                                        };
+                                        const coords = capitalCoords[isoCode];
+                                        if (coords) {
+                                            leafletMap.setView(coords, 5);
+                                        }
+                                    }
+                                }
+                            } else {
+                                const country = countriesList.find(c => c.iso_code === isoCode);
+                                if (country) {
+                                    const capitalCoords = {
+                                        'ID': [-6.2088, 106.8456],
+                                        'SG': [1.3521, 103.8198],
+                                        'CN': [39.9042, 116.4074],
+                                        'US': [38.9072, -77.0369],
+                                        'NL': [52.3676, 4.9041],
+                                        'JP': [35.6762, 139.6503],
+                                        'DE': [52.5200, 13.4050],
+                                        'AU': [-35.2809, 149.1300],
+                                        'GB': [51.5074, -0.1278],
+                                        'IN': [28.6139, 77.2090],
+                                        'MY': [3.1390, 101.6869],
+                                        'KR': [37.5665, 126.9780],
+                                    };
+                                    const coords = capitalCoords[isoCode];
+                                    if (coords) {
+                                        leafletMap.setView(coords, 5);
+                                    }
+                                }
+                            }
+                        }
+                    });
             }
 
             // --- COUNTRY ANALYTICS LOGIC (TAB 2) ---
