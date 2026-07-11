@@ -18,7 +18,13 @@
                         <i class="fa-solid fa-chart-line me-1"></i> Dashboard
                     </a>
                 </li>
-                <!-- We can add other menu links here as we build them -->
+                @if (Auth::user()->is_admin)
+                    <li class="nav-item">
+                        <a class="nav-link {{ request()->routeIs('admin.dashboard') ? 'active' : '' }}" href="{{ route('admin.dashboard') }}">
+                            <i class="fa-solid fa-user-shield me-1"></i> Admin Panel
+                        </a>
+                    </li>
+                @endif
             </ul>
 
             <!-- Settings Dropdown -->
