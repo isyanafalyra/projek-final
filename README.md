@@ -1,59 +1,131 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# Global Supply Chain Risk Intelligence Platform
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+Global Supply Chain Risk Intelligence Platform adalah platform berbasis web untuk memantau, menganalisis, dan memprediksi tingkat risiko rantai pasok global pada berbagai negara secara real-time. Platform ini mengintegrasikan berbagai API global pihak ketiga dan menerapkan algoritma analisis sentimen berita berbasis leksikon (*Lexicon-Based Sentiment Analysis*) serta kalkulasi bobot risiko (*Weighted Risk Model*).
 
-## About Laravel
+---
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+## Fitur Utama
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+1.  **Global Country Dashboard**: Menampilkan informasi makroekonomi negara terpilih beserta ringkasan cuaca dan perkiraan risiko terbaru.
+2.  **Risk Scoring Engine**: Visualisasi interaktif (Gauge Chart & Histori Tren) dari kalkulasi bobot risiko multi-dimensi (Cuaca, Inflasi, Sentimen Berita, Volatilitas Valuta).
+3.  **Global Port Weather Overlay**: Peta interaktif dunia berbasis **Leaflet.js** yang menampilkan titik pelabuhan kontainer kargo dan integrasi popup informasi cuaca real-time langsung melalui API satelit cuaca.
+4.  **Currency Impact Dashboard**: Informasi nilai tukar real-time dan visualisasi tren pergerakan volatilitas mata uang dalam 7 hari terakhir.
+5.  **News Intelligence (Sentiment Analysis)**: Pengambilan berita logistik via GNews API yang dianalisis secara internal dengan kamus leksikon PHP guna menentukan sentimen berita (Positif/Negatif/Netral) disertai persentase rasio.
+6.  **Country Comparison Engine**: Membandingkan profil risiko dan data makroekonomi antara dua negara secara berdampingan.
+7.  **Favorite Watchlist**: Menyimpan negara-negara penting ke dalam daftar pantau user.
+8.  **Admin Control Panel (CMS)**: Halaman manajemen user (toggle status admin), pengelolaan data koordinat pelabuhan, dan CMS untuk publikasi artikel/analisis riset logistik.
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+---
 
-## Learning Laravel
+## Skema Database (18 Tabel)
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework. You can also check out [Laravel Learn](https://laravel.com/learn), where you will be guided through building a modern Laravel application.
+Sistem ini memiliki total **18 tabel** di database untuk mendukung semua fitur analisis, audit, dan skalabilitas data:
+1.  `users` - Data pengguna terdaftar (menyimpan flag `is_admin`).
+2.  `password_reset_tokens` - Token reset kata sandi (default Laravel).
+3.  `sessions` - Penyimpanan sesi otentikasi aktif (default Laravel).
+4.  `cache` - Penyimpanan cache sistem (default Laravel).
+5.  `cache_locks` - Manajemen lock cache (default Laravel).
+6.  `jobs` - Antrean job sistem (default Laravel).
+7.  `job_batches` - Batching job sistem (default Laravel).
+8.  `failed_jobs` - Pencatatan job antrean yang gagal (default Laravel).
+9.  `countries` - Informasi master negara (nama, ISO code, region).
+10. `ports` - Lokasi pelabuhan kargo kontainer global beserta koordinat geografis.
+11. `risk_scores` - Log riwayat kalkulasi skor risiko tiap negara.
+12. `watchlists` - Daftar pantau (bookmark) negara favorit pilihan pengguna.
+13. `news_caches` - Caching artikel berita dari GNews API guna efisiensi kuota.
+14. `articles` - Artikel riset dan analisis logistik yang diposting oleh admin.
+15. `positive_words` - Kamus leksikon kata berunsur positif untuk analisis sentimen berita.
+16. `negative_words` - Kamus leksikon kata berunsur negatif untuk analisis sentimen berita.
+17. `activity_logs` - Audit trail untuk melacak aktivitas CRUD yang dilakukan oleh administrator (tambah/edit/hapus port, artikel, role).
+18. `currency_histories` - Penyimpanan historis pergerakan nilai tukar mata uang harian.
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+---
 
-## Laravel Sponsors
+## Arsitektur & Logika Data Science
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+### A. Weighted Risk Model (Kalkulasi Skor Risiko)
+Sistem memprediksi skor risiko negara (skala 0 - 100) menggunakan bobot berikut:
+*   **Weather Risk** (Cuaca buruk pelabuhan): **Bobot 30%**
+*   **Inflation Risk** (Laju inflasi negara): **Bobot 20%**
+*   **Political/News Risk** (Sentimen berita logistik): **Bobot 40%**
+*   **Currency Risk** (Volatilitas kurs): **Bobot 10%**
 
-### Premium Partners
+Kategori Skor Akhir:
+*   `< 30` : **Low Risk** (Risiko Rendah - Hijau)
+*   `30 - 60` : **Medium Risk** (Risiko Sedang - Kuning)
+*   `> 60` : **High Risk** (Risiko Tinggi - Merah)
 
-- **[Vehikl](https://vehikl.com)**
-- **[Tighten Co.](https://tighten.co)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Redberry](https://redberry.international/laravel-development)**
-- **[Active Logic](https://activelogic.com)**
+### B. Lexicon-Based Sentiment Analysis
+Logika pemrosesan teks berita di backend untuk mendeteksi sentimen positif/negatif dengan membandingkan kata dalam teks berita terhadap basis data kata positif (`positive_words`) dan kata negatif (`negative_words`).
 
-## Contributing
+---
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+## Spesifikasi API Internal
 
-## Code of Conduct
+Seluruh data disajikan secara dinamis melalui REST API internal berikut:
+*   `GET /api/countries` - Mendapatkan daftar semua negara & data makroekonomi.
+*   `GET /api/risk?country_id={id}` - Mengembalikan skor risiko terbaru dan data historis makro.
+*   `GET /api/ports` - Mendapatkan daftar pelabuhan beserta koordinat latitude/longitude untuk peta Leaflet.
+*   `GET /api/news?country_id={id}` - Mengambil berita terbaru yang telah dianalisis sentimennya.
+*   `GET /api/currency?base={code}` - Mengembalikan konversi nilai tukar & histori tren 7 hari terakhir.
+*   `POST /api/watchlist/toggle` - Menambah atau menghapus negara dari daftar pantau user (butuh login).
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+---
 
-## Security Vulnerabilities
+## Kredensial Pengujian Default
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+Anda dapat menggunakan akun pengujian berikut yang telah disediakan oleh database seeder:
 
-## License
+*   **Akun Administrator:**
+    *   Email: `admin@globalchain.com`
+    *   Password: `password`
+*   **Akun User Biasa:**
+    *   Email: `user@globalchain.com`
+    *   Password: `password`
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+---
+
+## Petunjuk Instalasi & Setup
+
+Ikuti langkah-langkah berikut untuk menjalankan proyek di lingkungan lokal Anda:
+
+1.  **Clone Repositori & Masuk ke Direktori Proyek**
+    ```bash
+    cd "projek akhir global chain"
+    ```
+
+2.  **Instal Dependensi PHP (Composer)**
+    ```bash
+    composer install
+    ```
+
+3.  **Salin File Konfigurasi Environment**
+    ```bash
+    cp .env.example .env
+    ```
+
+4.  **Konfigurasi Database & API Key di `.env`**
+    Sesuaikan koneksi database MySQL Anda di `.env`. Tambahkan juga API Key GNews di bagian bawah berkas:
+    ```env
+    DB_DATABASE=global_chain_db
+    DB_USERNAME=root
+    DB_PASSWORD=
+
+    GNEWS_API_KEY=your_gnews_api_key_here
+    ```
+
+5.  **Generate Application Key**
+    ```bash
+    php artisan key:generate
+    ```
+
+6.  **Jalankan Migrasi & Database Seeder**
+    ```bash
+    php artisan migrate:fresh --seed
+    ```
+
+7.  **Jalankan Server Lokal**
+    ```bash
+    php artisan serve --port=8000
+    ```
+    Aplikasi dapat diakses melalui browser di alamat **http://127.0.0.1:8000**.
