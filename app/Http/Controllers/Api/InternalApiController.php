@@ -9,6 +9,7 @@ use App\Models\RiskScore;
 use App\Services\RiskIntelligenceService;
 use App\Services\RiskCalculatorService;
 use App\Services\SentimentAnalysisService;
+use App\Models\Watchlist;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 
@@ -97,7 +98,7 @@ class InternalApiController extends Controller
         // Kalkulasi skor risiko baru secara real-time
         $riskData = $this->riskCalculator->calculateCountryRisk($country);
 
-        // Ambit log riwayat skor risiko sebelumnya (limit 5) untuk chart historis
+        // Ambil log riwayat skor risiko sebelumnya (limit 5) untuk chart historis
         $history = RiskScore::where('country_id', $country->id)
             ->orderBy('calculated_at', 'desc')
             ->limit(5)
@@ -111,10 +112,14 @@ class InternalApiController extends Controller
             ->reverse()
             ->values();
 
+        // Ambil data makro ekonomi historis (World Bank)
+        $macroData = $this->apiService->getMacroData($country->iso_code);
+
         return response()->json([
             'status' => 'success',
             'data' => array_merge($riskData, [
-                'history' => $history
+                'history' => $history,
+                'macro' => $macroData
             ])
         ]);
     }
@@ -250,6 +255,49 @@ class InternalApiController extends Controller
             'base' => $base,
             'rates' => $rates,
             'trends' => $historicalTrend
+        ]);
+    }
+
+    /**
+     * POST /api/watchlist/toggle
+     * Menambahkan atau menghapus negara dari watchlist user yang sedang login.
+     */
+    public function toggleWatchlist(Request $request)
+    {
+        $user = auth()->user();
+        if (!$user) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Silakan login terlebih dahulu untuk menandai watchlist.'
+            ], 401);
+        }
+
+        $countryId = $request->input('country_id');
+        if (empty($countryId)) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Parameter country_id wajib diisi.'
+            ], 400);
+        }
+
+        $watchlist = Watchlist::where('user_id', $user->id)
+            ->where('country_id', $countryId)
+            ->first();
+
+        if ($watchlist) {
+            $watchlist->delete();
+            $action = 'removed';
+        } else {
+            Watchlist::create([
+                'user_id' => $user->id,
+                'country_id' => $countryId,
+            ]);
+            $action = 'added';
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'action' => $action
         ]);
     }
 }

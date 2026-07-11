@@ -25,6 +25,7 @@ Route::prefix('api')->group(function () {
     Route::get('/ports', [InternalApiController::class, 'ports']);
     Route::get('/news', [InternalApiController::class, 'news']);
     Route::get('/currency', [InternalApiController::class, 'currency']);
+    Route::post('/watchlist/toggle', [InternalApiController::class, 'toggleWatchlist'])->middleware('auth');
 });
 
 require __DIR__.'/auth.php';
