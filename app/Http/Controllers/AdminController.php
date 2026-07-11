@@ -6,6 +6,7 @@ use App\Models\User;
 use App\Models\Port;
 use App\Models\Article;
 use App\Models\Country;
+use App\Models\ActivityLog;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 
@@ -27,7 +28,7 @@ class AdminController extends Controller
     /**
      * Mengubah peran user (Admin <=> User).
      */
-    public function toggleUserRole(User $user)
+    public function toggleUserRole(Request $request, User $user)
     {
         if (auth()->id() === $user->id) {
             return back()->with('error', 'Anda tidak dapat mendemosi akun Anda sendiri.');
@@ -36,19 +37,25 @@ class AdminController extends Controller
         $user->is_admin = !$user->is_admin;
         $user->save();
 
+        $this->logActivity('TOGGLE_ROLE', 'User', $user->id, "Mengubah role user {$user->name} menjadi " . ($user->is_admin ? 'Administrator' : 'User Biasa'), $request);
+
         return back()->with('success', "Role user {$user->name} berhasil diubah.");
     }
 
     /**
      * Menghapus user.
      */
-    public function deleteUser(User $user)
+    public function deleteUser(Request $request, User $user)
     {
         if (auth()->id() === $user->id) {
             return back()->with('error', 'Anda tidak dapat menghapus akun Anda sendiri.');
         }
 
+        $userName = $user->name;
+        $userId = $user->id;
         $user->delete();
+
+        $this->logActivity('DELETE', 'User', $userId, "Menghapus user {$userName}", $request);
 
         return back()->with('success', 'User berhasil dihapus.');
     }
@@ -66,7 +73,9 @@ class AdminController extends Controller
             'code' => 'nullable|string|max:50',
         ]);
 
-        Port::create($request->only(['name', 'country_id', 'latitude', 'longitude', 'code']));
+        $port = Port::create($request->only(['name', 'country_id', 'latitude', 'longitude', 'code']));
+
+        $this->logActivity('CREATE', 'Port', $port->id, "Menambahkan pelabuhan baru: {$port->name} ({$port->code})", $request);
 
         return back()->with('success', 'Pelabuhan baru berhasil ditambahkan.');
     }
@@ -86,15 +95,21 @@ class AdminController extends Controller
 
         $port->update($request->only(['name', 'country_id', 'latitude', 'longitude', 'code']));
 
+        $this->logActivity('UPDATE', 'Port', $port->id, "Memperbarui data pelabuhan: {$port->name}", $request);
+
         return back()->with('success', 'Data pelabuhan berhasil diperbarui.');
     }
 
     /**
      * Menghapus pelabuhan.
      */
-    public function deletePort(Port $port)
+    public function deletePort(Request $request, Port $port)
     {
+        $portName = $port->name;
+        $portId = $port->id;
         $port->delete();
+
+        $this->logActivity('DELETE', 'Port', $portId, "Menghapus pelabuhan: {$portName}", $request);
 
         return back()->with('success', 'Pelabuhan berhasil dihapus.');
     }
@@ -115,13 +130,12 @@ class AdminController extends Controller
         
         $imagePath = null;
         if ($request->hasFile('image')) {
-            // Simpan gambar secara publik di uploads
             $imageName = time() . '_' . $request->file('image')->getClientOriginalName();
             $request->file('image')->move(public_path('uploads/articles'), $imageName);
             $imagePath = 'uploads/articles/' . $imageName;
         }
 
-        Article::create([
+        $article = Article::create([
             'user_id' => auth()->id(),
             'title' => $request->input('title'),
             'slug' => $slug,
@@ -129,6 +143,8 @@ class AdminController extends Controller
             'image_path' => $imagePath,
             'published_at' => $request->input('published_at') ?? now(),
         ]);
+
+        $this->logActivity('CREATE', 'Article', $article->id, "Menerbitkan artikel baru: {$article->title}", $request);
 
         return back()->with('success', 'Artikel baru berhasil diterbitkan.');
     }
@@ -149,7 +165,6 @@ class AdminController extends Controller
 
         $imagePath = $article->image_path;
         if ($request->hasFile('image')) {
-            // Hapus gambar lama jika ada
             if ($imagePath && file_exists(public_path($imagePath))) {
                 @unlink(public_path($imagePath));
             }
@@ -166,21 +181,47 @@ class AdminController extends Controller
             'published_at' => $request->input('published_at') ?? $article->published_at,
         ]);
 
+        $this->logActivity('UPDATE', 'Article', $article->id, "Memperbarui artikel: {$article->title}", $request);
+
         return back()->with('success', 'Artikel berhasil diperbarui.');
     }
 
     /**
      * Menghapus postingan artikel.
      */
-    public function deleteArticle(Article $article)
+    public function deleteArticle(Request $request, Article $article)
     {
-        // Hapus file gambar terkait
         if ($article->image_path && file_exists(public_path($article->image_path))) {
             @unlink(public_path($article->image_path));
         }
 
+        $articleTitle = $article->title;
+        $articleId = $article->id;
         $article->delete();
 
+        $this->logActivity('DELETE', 'Article', $articleId, "Menghapus artikel: {$articleTitle}", $request);
+
         return back()->with('success', 'Artikel berhasil dihapus.');
+    }
+
+    /**
+     * Helper untuk mencatat aktivitas log admin.
+     */
+    private function logActivity($action, $modelType, $modelId, $details, Request $request)
+    {
+        try {
+            ActivityLog::create([
+                'user_id' => auth()->id(),
+                'action' => $action,
+                'model_type' => $modelType,
+                'model_id' => $modelId,
+                'details' => $details,
+                'ip_address' => $request->ip(),
+                'user_agent' => $request->userAgent(),
+            ]);
+        } catch (\Exception $e) {
+            // Lanjutkan eksekusi meskipun pencatatan log gagal agar tidak memblokir user flow utama
+            \Log::error("Gagal mencatat log aktivitas admin: " . $e->getMessage());
+        }
     }
 }
