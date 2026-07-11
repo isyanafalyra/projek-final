@@ -14,10 +14,10 @@ return new class extends Migration
         Schema::create('activity_logs', function (Blueprint $table) {
             $table->id();
             $table->foreignId('user_id')->nullable()->constrained()->onDelete('cascade');
-            $table->string('action'); // CREATE, UPDATE, DELETE, TOGGLE_ROLE
-            $table->string('model_type'); // Port, Article, User
+            $table->string('action'); // e.g. CREATE, UPDATE, DELETE
+            $table->string('model_type'); // e.g. Port, Article, User
             $table->unsignedBigInteger('model_id')->nullable();
-            $table->text('details')->nullable();
+            $table->text('details'); // Description of the action
             $table->string('ip_address', 45)->nullable();
             $table->text('user_agent')->nullable();
             $table->timestamps();

@@ -37,7 +37,8 @@ class AdminController extends Controller
         $user->is_admin = !$user->is_admin;
         $user->save();
 
-        $this->logActivity('TOGGLE_ROLE', 'User', $user->id, "Mengubah role user {$user->name} menjadi " . ($user->is_admin ? 'Administrator' : 'User Biasa'), $request);
+        $roleName = $user->is_admin ? 'Admin' : 'User';
+        $this->logActivity($request, 'TOGGLE_ROLE', 'User', $user->id, "Mengubah role user {$user->name} menjadi {$roleName}");
 
         return back()->with('success', "Role user {$user->name} berhasil diubah.");
     }
@@ -51,11 +52,11 @@ class AdminController extends Controller
             return back()->with('error', 'Anda tidak dapat menghapus akun Anda sendiri.');
         }
 
-        $userName = $user->name;
-        $userId = $user->id;
+        $name = $user->name;
+        $id = $user->id;
         $user->delete();
 
-        $this->logActivity('DELETE', 'User', $userId, "Menghapus user {$userName}", $request);
+        $this->logActivity($request, 'DELETE_USER', 'User', $id, "Menghapus user: {$name}");
 
         return back()->with('success', 'User berhasil dihapus.');
     }
@@ -75,7 +76,7 @@ class AdminController extends Controller
 
         $port = Port::create($request->only(['name', 'country_id', 'latitude', 'longitude', 'code']));
 
-        $this->logActivity('CREATE', 'Port', $port->id, "Menambahkan pelabuhan baru: {$port->name} ({$port->code})", $request);
+        $this->logActivity($request, 'CREATE_PORT', 'Port', $port->id, "Menambahkan pelabuhan baru: {$port->name} ({$port->code})");
 
         return back()->with('success', 'Pelabuhan baru berhasil ditambahkan.');
     }
@@ -95,7 +96,7 @@ class AdminController extends Controller
 
         $port->update($request->only(['name', 'country_id', 'latitude', 'longitude', 'code']));
 
-        $this->logActivity('UPDATE', 'Port', $port->id, "Memperbarui data pelabuhan: {$port->name}", $request);
+        $this->logActivity($request, 'UPDATE_PORT', 'Port', $port->id, "Memperbarui data pelabuhan: {$port->name}");
 
         return back()->with('success', 'Data pelabuhan berhasil diperbarui.');
     }
@@ -105,11 +106,11 @@ class AdminController extends Controller
      */
     public function deletePort(Request $request, Port $port)
     {
-        $portName = $port->name;
-        $portId = $port->id;
+        $name = $port->name;
+        $id = $port->id;
         $port->delete();
 
-        $this->logActivity('DELETE', 'Port', $portId, "Menghapus pelabuhan: {$portName}", $request);
+        $this->logActivity($request, 'DELETE_PORT', 'Port', $id, "Menghapus pelabuhan: {$name}");
 
         return back()->with('success', 'Pelabuhan berhasil dihapus.');
     }
@@ -130,6 +131,7 @@ class AdminController extends Controller
         
         $imagePath = null;
         if ($request->hasFile('image')) {
+            // Simpan gambar secara publik di uploads
             $imageName = time() . '_' . $request->file('image')->getClientOriginalName();
             $request->file('image')->move(public_path('uploads/articles'), $imageName);
             $imagePath = 'uploads/articles/' . $imageName;
@@ -144,7 +146,7 @@ class AdminController extends Controller
             'published_at' => $request->input('published_at') ?? now(),
         ]);
 
-        $this->logActivity('CREATE', 'Article', $article->id, "Menerbitkan artikel baru: {$article->title}", $request);
+        $this->logActivity($request, 'CREATE_ARTICLE', 'Article', $article->id, "Menerbitkan artikel baru: {$article->title}");
 
         return back()->with('success', 'Artikel baru berhasil diterbitkan.');
     }
@@ -165,6 +167,7 @@ class AdminController extends Controller
 
         $imagePath = $article->image_path;
         if ($request->hasFile('image')) {
+            // Hapus gambar lama jika ada
             if ($imagePath && file_exists(public_path($imagePath))) {
                 @unlink(public_path($imagePath));
             }
@@ -181,7 +184,7 @@ class AdminController extends Controller
             'published_at' => $request->input('published_at') ?? $article->published_at,
         ]);
 
-        $this->logActivity('UPDATE', 'Article', $article->id, "Memperbarui artikel: {$article->title}", $request);
+        $this->logActivity($request, 'UPDATE_ARTICLE', 'Article', $article->id, "Memperbarui artikel: {$article->title}");
 
         return back()->with('success', 'Artikel berhasil diperbarui.');
     }
@@ -191,15 +194,16 @@ class AdminController extends Controller
      */
     public function deleteArticle(Request $request, Article $article)
     {
+        // Hapus file gambar terkait
         if ($article->image_path && file_exists(public_path($article->image_path))) {
             @unlink(public_path($article->image_path));
         }
 
-        $articleTitle = $article->title;
-        $articleId = $article->id;
+        $title = $article->title;
+        $id = $article->id;
         $article->delete();
 
-        $this->logActivity('DELETE', 'Article', $articleId, "Menghapus artikel: {$articleTitle}", $request);
+        $this->logActivity($request, 'DELETE_ARTICLE', 'Article', $id, "Menghapus artikel: {$title}");
 
         return back()->with('success', 'Artikel berhasil dihapus.');
     }
@@ -207,7 +211,7 @@ class AdminController extends Controller
     /**
      * Helper untuk mencatat aktivitas log admin.
      */
-    private function logActivity($action, $modelType, $modelId, $details, Request $request)
+    private function logActivity(Request $request, string $action, string $modelType, ?int $modelId, string $details)
     {
         try {
             ActivityLog::create([
@@ -220,8 +224,7 @@ class AdminController extends Controller
                 'user_agent' => $request->userAgent(),
             ]);
         } catch (\Exception $e) {
-            // Lanjutkan eksekusi meskipun pencatatan log gagal agar tidak memblokir user flow utama
-            \Log::error("Gagal mencatat log aktivitas admin: " . $e->getMessage());
+            \Illuminate\Support\Facades\Log::error("Gagal mencatat log aktivitas admin: " . $e->getMessage());
         }
     }
 }
