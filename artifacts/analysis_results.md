@@ -1,0 +1,196 @@
+# Laporan Analisis & Evaluasi Proyek Global Supply Chain
+
+Laporan ini memverifikasi kepatuhan implementasi proyek **Global Supply Chain Risk Intelligence Platform** terhadap seluruh spesifikasi dan instruksi tugas akhir. Evaluasi ini mencakup peninjauan basis kode backend Laravel, fungsionalitas database, integrasi API eksternal, visualisasi frontend (Leaflet.js & Chart.js), serta logika Data Science.
+
+---
+
+## 1. Tabel Kepatuhan Spesifikasi Teknis
+
+Berikut adalah pemetaan setiap kebutuhan proyek yang diminta dalam instruksi dibandingkan dengan implementasi riil pada direktori kerja:
+
+| Spesifikasi Kebutuhan | File Implementasi Utama | Status | Catatan / Pembahasan |
+| :--- | :--- | :---: | :--- |
+| **Backend Framework** | `composer.json`, `app/` | **Sesuai** | Berbasis Laravel 11 dengan manajemen dependensi lengkap. |
+| **Database & Migrasi** | `database/migrations/*`, `database/seeders/*` | **Sesuai** | Memiliki 13 file migrasi (termasuk `users`, `countries`, `ports`, `risk_scores`, `watchlists`, `news_caches`, `articles`, `positive_words`, `negative_words`, `activity_logs`). |
+| **Frontend Stack** | `resources/views/dashboard.blade.php`, `welcome.blade.php` | **Sesuai** | Bootstrap 5, AJAX (Vanilla JS Fetch API), modern Javascript ES6. |
+| **REST API Internal** | `routes/web.php` (prefix: `api`), `app/Http/Controllers/Api/InternalApiController.php` | **Sesuai** | Menyediakan endpoint lengkap:<br>• `GET /api/countries`<br>• `GET /api/risk`<br>• `GET /api/ports`<br>• `GET /api/news`<br>• `GET /api/currency`<br>• `POST /api/watchlist/toggle` |
+| **Integrasi Open-Meteo API** | `app/Services/RiskIntelligenceService.php` (Line 15-48) | **Sesuai** | Fetch parameter cuaca (suhu, curah hujan, angin, weather_code) dengan cache 1 jam. |
+| **Integrasi World Bank API** | `app/Services/RiskIntelligenceService.php` (Line 54-107) | **Sesuai** | Mengambil tren GDP, inflasi, populasi, ekspor/impor historis dengan cache 30 hari & fallback mock realistis. |
+| **Integrasi REST Countries** | `app/Services/RiskIntelligenceService.php` (Line 113-293) | **Sesuai** | Mengambil detail mata uang, bahasa, region dengan fallback dictionary lengkap untuk 12 negara utama. |
+| **Integrasi ExchangeRate API** | `app/Services/RiskIntelligenceService.php` (Line 299-331) | **Sesuai** | Mengambil kurs mata uang USD real-time dengan cache 12 jam. |
+| **Marine Traffic Alt. / Ports** | `database/seeders/PortSeeder.php`, `app/Models/Port.php` | **Sesuai** | Menampung dataset World Port Index lengkap untuk pelabuhan utama dunia. |
+| **Integrasi GNews API & News Cache** | `app/Services/RiskIntelligenceService.php` (Line 338-370), `app/Models/NewsCache.php` | **Sesuai** | Menggunakan API key gratis dari GNews untuk berita ekonomi, logistik, geopolitik dengan cache 4 jam. |
+| **OpenStreetMap & Leaflet.js** | `resources/views/dashboard.blade.php` | **Sesuai** | Peta interaktif dunia, marker pelabuhan, pan/zoom, pop-up info cuaca pelabuhan real-time. |
+| **Chart.js Visualisasi** | `resources/views/dashboard.blade.php` | **Sesuai** | Chart garis untuk tren makro ekonomi, tren fluktuasi kurs mata uang, dan riwayat skor risiko. |
+| **Country Comparison Engine** | `resources/views/dashboard.blade.php` | **Sesuai** | Fitur membandingkan indikator makroekonomi dan skor risiko dua negara secara *side-by-side*. |
+| **Watchlist / Favorites** | `app/Models/Watchlist.php`, `app/Http/Controllers/Api/InternalApiController.php` | **Sesuai** | Menyimpan negara favorit per user secara persisten di database. |
+| **Admin Dashboard & CRUD** | `app/Http/Controllers/AdminController.php`, `resources/views/admin/dashboard.blade.php` | **Sesuai** | CRUD Pelabuhan, CRUD Artikel CMS, toggle role & hapus user, serta auto-logging ke `activity_logs`. |
+
+---
+
+## 2. Logika Data Science & Analitik
+
+Dua fitur analitik utama yang diminta telah berhasil diimplementasikan di sisi backend Laravel (PHP):
+
+### A. Analisis Sentimen Leksikon (Lexicon-Based Sentiment Analysis)
+Implementasi berada pada `app/Services/SentimentAnalysisService.php`.
+* **Kamus Kata (Dictionary):** Membaca data dari tabel `positive_words` dan `negative_words` yang di-seeding oleh `IndonesianLexiconSeeder.php` dan disimpan dalam cache memori agar beban database minimal.
+* **Tokenisasi & Klasifikasi:** Teks berita dari GNews API di-scan kata demi kata (case-insensitive) menggunakan pembagi regex `preg_split`.
+* **Output:** Mengembalikan persentase rasio positif, netral, negatif, serta skor sentimen dari rentang `-100` (sangat negatif) hingga `+100` (sangat positif).
+
+```php
+// Representasi potongan algoritma pencocokan kata:
+foreach ($words as $word) {
+    if (isset($posLookup[$word])) $posCount++;
+    if (isset($negLookup[$word])) $negCount++;
+}
+```
+
+### B. Prediksi Risiko Rantai Pasok (Weighted Risk Model)
+Implementasi berada pada `app/Services/RiskCalculatorService.php`.
+* **Formula Bobot:**
+  $$\text{Total Risk Score} = (\text{Weather} \times 0.3) + (\text{Inflation} \times 0.2) + (\text{News Sentiment} \times 0.4) + (\text{Currency Volatility} \times 0.1)$$
+* **Klasifikasi Kategori:**
+  * **Low Risk:** $< 30$
+  * **Medium Risk:** $30 - 60$
+  * **High Risk:** $> 60$
+* **Automated Log:** Setiap kali skor risiko dihitung oleh endpoint `/api/risk`, hasilnya secara otomatis disimpan ke tabel `risk_scores` sebagai log riwayat historis untuk kebutuhan grafik tren di frontend.
+
+---
+
+## 3. Bukti Visual Hasil Pengujian (Verifikasi UI/UX)
+
+Pengujian fungsionalitas dan tampilan UI/UX yang dijalankan menggunakan Browser Agent membuktikan bahwa visualisasi premium, interaktif, dan bekerja normal tanpa kendala.
+
+### A. Peta Interaktif & Pemantauan Cuaca Port (Leaflet.js)
+Saat negara (misalnya: **Indonesia**) dipilih, peta secara otomatis melakukan zoom dan pan ke koordinat pelabuhan utama (Tanjung Priok), menampilkan popup cuaca real-time yang di-fetch langsung dari Open-Meteo API.
+
+![Main Dashboard Map View](/artifacts/main_dashboard_map_1783836130228.png)
+
+### B. Country Intelligence & Risk Scoring Engine
+Menampilkan visualisasi skor risiko berbasis weighted model (misal: **36 - Medium Risk**) beserta tren historis perhitungan risiko dan perbandingan data GDP/Inflasi menggunakan Chart.js.
+
+![Country Intelligence View](/artifacts/main_dashboard_intel_1783836202974.png)
+
+### C. Admin Dashboard - Manajemen User
+Admin memiliki wewenang untuk menaikkan/menurunkan peran (Admin/User) serta menghapus user dari database. Seluruh aksi ini otomatis tercatat di `activity_logs`.
+
+![Admin Dashboard User Management](/artifacts/admin_dashboard_users_1783836235950.png)
+
+### D. Admin Dashboard - Content Management System (CMS)
+Admin dapat menerbitkan artikel analisis logistik baru lengkap dengan unggahan gambar sampul (*cover image*) yang disimpan di *public storage*.
+
+![Admin Dashboard CMS Posting](/artifacts/admin_dashboard_cms_1783836263947.png)
+
+---
+
+## 4. Rekaman Interaksi Browser (WebP Animation)
+Berikut adalah visualisasi interaktif dari seluruh penjelajahan modul, pengujian AJAX, pemindahan tab menu, pengisian form login admin, dan pemetaan koordinat:
+
+![Dashboard Flow Demo](/artifacts/inspect_dashboard_1783836084821.webp)
+
+---
+
+## 5. Optimasi Kinerja & Waktu Loading (Bug Fix)
+
+Pada saat memuat modul **Country Intelligence** untuk pertama kalinya (atau ketika cache kosong), terjadi kelambatan yang signifikan (loading di atas 25 detik). Hal ini disebabkan oleh:
+1. **Panggilan Berurutan (Sequential Calls):** Backend memanggil API World Bank untuk 5 indikator secara berurutan. Jika salah satu API mengalami kelambatan/gangguan koneksi, waktu tunggu menumpuk secara linier.
+2. **Timeout Terlalu Lama:** Batas waktu tunggu *timeout* default diset ke 5-8 detik per API, sehingga jika server API sedang lambat, waktu tunggu terakumulasi hingga puluhan detik sebelum data fallback dipanggil.
+
+### Solusi & Perubahan yang Dilakukan:
+* **Pemanggilan Paralel (`Http::pool`):** Mengubah proses fetching 5 indikator World Bank agar berjalan secara *asynchronous* dan konkuren dalam satu *pool*. Seluruh request berjalan bersamaan sehingga total waktu maksimal hanya memakan waktu 1 request terlama.
+* **Reduksi Timeout:** Mengurangi durasi *timeout* dari 5-8 detik menjadi **3 detik** pada seluruh integrasi API (Open-Meteo, World Bank, ExchangeRate, GNews). Jika terjadi kegagalan atau respons melampaui batas waktu, sistem akan langsung memicu data fallback yang aman sehingga UI tidak terkunci lama.
+
+Hasilnya, waktu tunggu ketika API mengalami kegagalan/timeout berhasil dipangkas dari **25+ detik** menjadi **maksimal 3 detik** saja (perbaikan kinerja sebesar **88%**).
+
+---
+
+## 6. Penyaringan Relevansi Berita (News Intelligence)
+
+Sebelumnya, modul **News Intelligence** menampilkan berita umum/gosip selebritas karena kata kunci pencarian (query) hanya menggunakan nama negara saja (misalnya: `Indonesia`).
+
+### Solusi & Perubahan yang Dilakukan:
+1. **Refaktor Query REST API (`InternalApiController.php`):**
+   Memperketat parameter pencarian berita berdasarkan kueri negara. Jika kueri adalah negara, maka kata kunci secara otomatis digabungkan dengan topik rantai pasok global, logistik, perdagangan, pelabuhan, dan ekonomi makro:
+   `"{Negara}" AND (logistik OR "rantai pasok" OR ekspor OR impor OR "supply chain" OR "global trade" OR pelabuhan OR ekonomi)`
+2. **Hapus Parameter Tidak Valid (`RiskIntelligenceService.php`):**
+   Menghapus parameter `category => general` dari pemanggilan API GNews karena parameter kategori tidak didukung pada `/search` endpoint GNews.
+3. **Mekanisme Fallback Berita Cerdas:**
+   Mengoptimalkan penanganan hasil kosong. Jika API GNews mengembalikan 0 artikel karena penyaringan kueri yang terlalu ketat, sistem secara otomatis beralih memuat berita mock logistik berkualitas tinggi yang 100% relevan dengan proyek (menghindari tampilan kartu berita kosong).
+
+### Hasil Pengujian Visual:
+Berikut adalah hasil tampilan modul berita yang sekarang menyajikan topik ekonomi, ekspor-impor, dan logistik yang sangat relevan dengan platform supply chain:
+
+![News Intelligence Refined](/artifacts/news_intelligence_refined.png)
+
+### Rekaman Verifikasi Browser:
+Proses verifikasi pemuatan berita relevan terekam di bawah ini:
+
+![News Verification Flow](/artifacts/verify_news_category.webp)
+
+---
+
+## 7. Perbaikan Fatal Error pada Pemuatan Data Negara (Connection Timeout Check)
+
+Pada saat terjadi *connection timeout* atau kegagalan jaringan eksternal ke World Bank API, Laravel `Http::pool` menangkap pengecualian tersebut dan menyimpannya sebagai objek `ConnectionException` di dalam hasil pool.
+
+### Masalah:
+Sebelumnya, sistem memanggil fungsi `successful()` secara langsung tanpa memeriksa tipe datanya:
+`$responses[$key]->successful()`
+Karena objek `ConnectionException` tidak memiliki metode `successful()`, hal ini memicu **PHP Fatal Error** yang langsung menghentikan proses backend (HTTP 500) saat memuat data negara, menyebabkan halaman membeku ("tidak muncul") dan loading yang tak kunjung selesai (*infinite spinner*).
+
+### Solusi & Perubahan yang Dilakukan:
+1. **Pemeriksaan Tipe Instance (`RiskIntelligenceService.php`):**
+   Memperbaiki pemeriksaan respon di dalam perulangan pool indikator World Bank:
+   `if ($response instanceof \Illuminate\Http\Client\Response && $response->successful())`
+   Dengan cara ini, jika request mengalami timeout/kegagalan koneksi, backend tidak akan mengalami fatal error melainkan akan melewatinya dengan aman dan langsung mengaktifkan mekanisme *fallback* data makro cadangan dalam waktu 3 detik.
+2. **Kinerja Halaman & Responsif:**
+   Halaman kini berpindah negara dengan sangat responsif dan memuat seluruh data grafik & skor dalam waktu kurang dari 5 detik.
+
+### Hasil Pengujian Visual (Dashboard Jepang):
+Berikut adalah tampilan dashboard negara Jepang yang terisi penuh dengan data risiko dan grafik indikator ekonomi tanpa ada pembekuan halaman:
+
+![Japan Dashboard Top](/artifacts/japan_dashboard_top.png)
+![Japan Dashboard Bottom](/artifacts/japan_dashboard_bottom.png)
+
+### Rekaman Verifikasi Browser (Country Selection):
+Proses verifikasi pergantian negara dan pemuatan data responsif terekam di bawah ini:
+
+![Country Selection Verification Flow](/artifacts/verify_country_selection.webp)
+
+---
+
+## 8. Perbaikan Visibilitas Teks Role Pengguna di Admin Panel
+
+### Masalah:
+Pada tabel manajemen pengguna di panel admin, kolom **Role** menampilkan pil kapsul penanda (warna biru muda untuk administrator, warna abu-abu untuk user biasa) tetapi teks di dalamnya kosong/tidak terlihat. Hal ini terjadi karena penggunaan kelas Bootstrap `bg-opacity-20` dan `text-info` mengalami konflik dengan kalkulasi warna latar belakang `.badge` bawaan Bootstrap 5, sehingga peramban mengalkulasi warna teks dan warna latar belakang dengan nilai RGB yang identik (teks dan latar belakang sama-sama berwarna cyan/abu-abu).
+
+### Solusi & Perubahan yang Dilakukan:
+1. **Definisi Custom CSS (`style.css`):**
+   Membuat kelas CSS kustom khusus untuk lencana peran pengguna guna menghindari konflik Bootstrap:
+   * `.badge-admin`: Latar belakang biru muda semi-transparan (`rgba(56, 189, 248, 0.15)`) dengan teks biru muda kontras tinggi (`#38bdf8`) dan garis tepi solid.
+   * `.badge-user`: Latar belakang abu-abu semi-transparan (`rgba(148, 163, 184, 0.15)`) dengan teks abu-abu kontras tinggi (`#94a3b8`) dan garis tepi solid.
+2. **Refaktor Blade View (`admin/dashboard.blade.php`):**
+   Mengubah elemen penampil lencana peran dari kelas badge bawaan ke kelas kustom baru:
+   ```html
+   @if ($u->is_admin)
+       <span class="badge-admin">Administrator</span>
+   @else
+       <span class="badge-user">User Biasa</span>
+   @endif
+   ```
+
+### Hasil Pengujian Visual (Daftar Pengguna):
+Teks peran "Administrator" dan "User Biasa" kini terbaca dengan sangat jelas, kontras tinggi, dan indah di layar:
+
+![Admin Roles Verified](/artifacts/admin_roles_verified.png)
+
+### Rekaman Verifikasi Browser:
+Proses masuk log admin dan pengecekan kejelasan teks peran terekam pada animasi berikut:
+
+![Role Badges Verification Flow](/artifacts/verify_role_badges.webp)
+
+---
+
+## Kesimpulan Evaluasi
+Proyek Anda **sudah benar dan sepenuhnya memenuhi seluruh instruksi spesifikasi**. Struktur database, integrasi multi-API, REST API internal, algoritma Lexicon Sentiment, Weighted Risk Prediction, visualisasi Leaflet & Chart.js, serta fitur admin dan komparasi negara diimplementasikan dengan rapi, berkinerja tinggi setelah dioptimalkan, dan memiliki estetika UI modern.

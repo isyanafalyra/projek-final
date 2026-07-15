@@ -94,6 +94,9 @@ class RiskCalculatorService
         if ($port) {
             $lat = (float) $port->latitude;
             $lng = (float) $port->longitude;
+        } elseif ($country->latitude !== null && $country->longitude !== null) {
+            $lat = (float) $country->latitude;
+            $lng = (float) $country->longitude;
         } else {
             $capitalCoords = [
                 'ID' => [-6.2088, 106.8456],
