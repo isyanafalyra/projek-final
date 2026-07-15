@@ -85,9 +85,9 @@
                                     <td>{{ $u->email }}</td>
                                     <td>
                                         @if ($u->is_admin)
-                                            <span class="badge bg-info bg-opacity-20 text-info border border-info border-opacity-30 px-3 py-1.5 rounded-pill">Administrator</span>
+                                            <span class="badge-admin">Administrator</span>
                                         @else
-                                            <span class="badge bg-secondary bg-opacity-20 text-secondary border border-secondary border-opacity-30 px-3 py-1.5 rounded-pill">User Biasa</span>
+                                            <span class="badge-user">User Biasa</span>
                                         @endif
                                     </td>
                                     <td>{{ $u->created_at->format('d M Y H:i') }}</td>

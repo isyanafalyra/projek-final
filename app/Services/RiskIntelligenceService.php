@@ -5,6 +5,7 @@ namespace App\Services;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Http\Client\Pool;
 
 class RiskIntelligenceService
 {
@@ -18,7 +19,7 @@ class RiskIntelligenceService
 
         return Cache::remember($cacheKey, 3600, function () use ($lat, $lng) {
             try {
-                $response = Http::timeout(5)->get('https://api.open-meteo.com/v1/forecast', [
+                $response = Http::timeout(3)->get('https://api.open-meteo.com/v1/forecast', [
                     'latitude' => $lat,
                     'longitude' => $lng,
                     'current' => 'temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,rain,showers,snowfall,weather_code,wind_speed_10m,wind_gusts_10m',
@@ -67,14 +68,22 @@ class RiskIntelligenceService
 
             $result = [];
 
-            foreach ($indicators as $key => $code) {
-                try {
-                    $response = Http::timeout(5)->get("http://api.worldbank.org/v2/country/{$countryIso}/indicator/{$code}", [
-                        'date' => '2015:2025',
-                        'format' => 'json'
-                    ]);
+            try {
+                // Fetch all indicators concurrently using HTTP pool to avoid sequential timeouts
+                $responses = Http::pool(function (Pool $pool) use ($countryIso, $indicators) {
+                    $requests = [];
+                    foreach ($indicators as $key => $code) {
+                        $requests[$key] = $pool->as($key)->timeout(3)->get("http://api.worldbank.org/v2/country/{$countryIso}/indicator/{$code}", [
+                            'date' => '2015:2025',
+                            'format' => 'json'
+                        ]);
+                    }
+                    return $requests;
+                });
 
-                    if ($response->successful()) {
+                foreach ($indicators as $key => $code) {
+                    $response = $responses[$key] ?? null;
+                    if ($response instanceof \Illuminate\Http\Client\Response && $response->successful()) {
                         $data = $response->json();
                         // Respon World Bank bertipe array: [metadata, data_records]
                         if (isset($data[1]) && is_array($data[1])) {
@@ -92,9 +101,9 @@ class RiskIntelligenceService
                             $result[$key] = $records;
                         }
                     }
-                } catch (\Exception $e) {
-                    Log::error("World Bank API Error for indicator {$key} ({$countryIso}): " . $e->getMessage());
                 }
+            } catch (\Exception $e) {
+                Log::error("World Bank API Concurrent Error ({$countryIso}): " . $e->getMessage());
             }
 
             if (empty($result)) {
@@ -303,7 +312,7 @@ class RiskIntelligenceService
 
         return Cache::remember($cacheKey, 43200, function () use ($baseCurrency) {
             try {
-                $response = Http::timeout(5)->get("https://open.er-api.com/v6/latest/{$baseCurrency}");
+                $response = Http::timeout(3)->get("https://open.er-api.com/v6/latest/{$baseCurrency}");
 
                 if ($response->successful()) {
                     $data = $response->json();
@@ -335,34 +344,70 @@ class RiskIntelligenceService
      * Jika API key tidak ada, otomatis memuat mock berita berkualitas.
      * Cache duration: 4 Jam (14400 detik)
      */
-    public function getNewsData(string $query = 'logistik OR "rantai pasok" OR ekspor OR impor'): array
+    public function getNewsData(string $query = 'logistik OR "rantai pasok" OR ekspor'): array
     {
         $cacheKey = "gnews_data_" . md5($query);
 
         return Cache::remember($cacheKey, 14400, function () use ($query) {
             $apiKey = config('services.gnews.key');
 
-            if (empty($apiKey)) {
-                return $this->getMockNewsData($query);
+            if (!empty($apiKey)) {
+                try {
+                    $response = Http::timeout(3)->get('https://gnews.io/api/v4/search', [
+                        'q' => $query,
+                        'lang' => 'id',
+                        'apikey' => $apiKey,
+                        'max' => 10
+                    ]);
+
+                    if ($response->successful()) {
+                        $data = $response->json();
+                        $articles = $data['articles'] ?? [];
+                        if (!empty($articles)) {
+                            return $articles;
+                        }
+                    }
+                } catch (\Exception $e) {
+                    Log::error("GNews API Error: " . $e->getMessage());
+                }
             }
 
+            // Jika API Key tidak ada atau limit habis, gunakan Bing News RSS (Berita Riil, Direct Links)
             try {
-                $response = Http::timeout(8)->get('https://gnews.io/api/v4/search', [
-                    'q' => $query,
-                    'lang' => 'id',
-                    'category' => 'general',
-                    'apikey' => $apiKey,
-                    'max' => 10
-                ]);
-
-                if ($response->successful()) {
-                    $data = $response->json();
-                    return $data['articles'] ?? [];
-                } else {
-                    Log::warning("GNews API returned status: " . $response->status() . " - Fallback to Mock News.");
+                $rssQuery = urlencode($query);
+                // Menggunakan Bing News RSS karena memberikan direct URL, menghindari 403 CloudFront dari redirector Google
+                $rssUrl = "https://www.bing.com/news/search?q={$rssQuery}&format=rss";
+                $rssResponse = Http::timeout(5)->get($rssUrl);
+                
+                if ($rssResponse->successful()) {
+                    $xml = simplexml_load_string($rssResponse->body());
+                    if ($xml && isset($xml->channel->item)) {
+                        $articles = [];
+                        $count = 0;
+                        foreach ($xml->channel->item as $item) {
+                            if ($count >= 10) break;
+                            
+                            $url = (string) $item->link;
+                            
+                            $articles[] = [
+                                'title' => (string) $item->title,
+                                'description' => strip_tags((string) $item->description),
+                                'content' => strip_tags((string) $item->description),
+                                'source' => ['name' => (string) ($item->source ?? 'Global News')],
+                                'url' => $url,
+                                'image' => 'https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?q=80&w=600',
+                                'publishedAt' => date('Y-m-d\TH:i:s\Z', strtotime((string) $item->pubDate))
+                            ];
+                            $count++;
+                        }
+                        
+                        if (!empty($articles)) {
+                            return $articles;
+                        }
+                    }
                 }
             } catch (\Exception $e) {
-                Log::error("GNews API Error: " . $e->getMessage() . " - Fallback to Mock News.");
+                Log::error("Bing News RSS Error: " . $e->getMessage());
             }
 
             return $this->getMockNewsData($query);
