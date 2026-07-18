@@ -40,27 +40,29 @@ class RiskCalculatorService
         $totalScore = ($weatherScore * 0.3) + ($inflationScore * 0.2) + ($politicalScore * 0.4) + ($currencyScore * 0.1);
         $totalScore = round($totalScore, 2);
 
-        // Determine Risk Level
+        // Determine Risk Level (High Risk starts at 60)
         if ($totalScore < 30) {
             $riskLevel = 'Low Risk';
-        } elseif ($totalScore <= 60) {
+        } elseif ($totalScore < 60) {
             $riskLevel = 'Medium Risk';
         } else {
             $riskLevel = 'High Risk';
         }
 
-        // Save to database log
+        // Save to database log (updateOrCreate to avoid duplicates)
         try {
-            RiskScore::create([
-                'country_id' => $country->id,
-                'weather_score' => $weatherScore,
-                'inflation_score' => $inflationScore,
-                'political_score' => $politicalScore,
-                'currency_score' => $currencyScore,
-                'total_score' => $totalScore,
-                'risk_level' => $riskLevel,
-                'calculated_at' => now(),
-            ]);
+            RiskScore::updateOrCreate(
+                ['country_id' => $country->id],
+                [
+                    'weather_score' => $weatherScore,
+                    'inflation_score' => $inflationScore,
+                    'political_score' => $politicalScore,
+                    'currency_score' => $currencyScore,
+                    'total_score' => $totalScore,
+                    'risk_level' => $riskLevel,
+                    'calculated_at' => now(),
+                ]
+            );
         } catch (\Exception $e) {
             Log::error("Failed to save risk score log: " . $e->getMessage());
         }
@@ -240,6 +242,21 @@ class RiskCalculatorService
         // Risk score range: 100 (Risiko Maksimum) s.d 0 (Risiko Minimum)
         // Rumus: (100 - avgSentiment) / 2
         $riskScore = (100 - $avgSentiment) / 2;
+
+        // Geopolitical base risk modifier for known high-risk countries
+        $iso = strtoupper($country->iso_code);
+        $politicalBaselines = [
+            'VE' => 90.0, // Venezuela
+            'UA' => 90.0, // Ukraine
+            'RU' => 75.0, // Russia
+            'SD' => 95.0, // Sudan
+            'YE' => 95.0, // Yemen
+            'SY' => 95.0, // Syria
+            'ZW' => 90.0, // Zimbabwe
+        ];
+        if (isset($politicalBaselines[$iso])) {
+            $riskScore = max($riskScore, $politicalBaselines[$iso]);
+        }
 
         return min(max($riskScore, 0.0), 100.0);
     }
