@@ -18,19 +18,22 @@ class RiskIntelligenceService
         $cacheKey = "weather_data_lat_lng_{$lat}_{$lng}";
 
         return Cache::remember($cacheKey, 3600, function () use ($lat, $lng) {
-            try {
-                $response = Http::timeout(3)->get('https://api.open-meteo.com/v1/forecast', [
-                    'latitude' => $lat,
-                    'longitude' => $lng,
-                    'current' => 'temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,rain,showers,snowfall,weather_code,wind_speed_10m,wind_gusts_10m',
-                    'timezone' => 'auto'
-                ]);
+            if (!\Illuminate\Support\Facades\Cache::get('offline_api_open_meteo')) {
+                try {
+                    $response = Http::timeout(3)->get('https://api.open-meteo.com/v1/forecast', [
+                        'latitude' => $lat,
+                        'longitude' => $lng,
+                        'current' => 'temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,rain,showers,snowfall,weather_code,wind_speed_10m,wind_gusts_10m',
+                        'timezone' => 'auto'
+                    ]);
 
-                if ($response->successful()) {
-                    return $response->json();
+                    if ($response->successful()) {
+                        return $response->json();
+                    }
+                } catch (\Exception $e) {
+                    Log::error("Open-Meteo API Error: " . $e->getMessage());
+                    \Illuminate\Support\Facades\Cache::put('offline_api_open_meteo', true, 600);
                 }
-            } catch (\Exception $e) {
-                Log::error("Open-Meteo API Error: " . $e->getMessage());
             }
 
             // Fallback empty weather data
@@ -57,18 +60,26 @@ class RiskIntelligenceService
         $countryIso = strtoupper($countryIso);
         $cacheKey = "worldbank_macro_data_{$countryIso}";
 
-        return Cache::remember($cacheKey, 2592000, function () use ($countryIso) {
-            $indicators = [
-                'gdp' => 'NY.GDP.MKTP.CD', // GDP (current USD)
-                'inflation' => 'FP.CPI.TOTL.ZG', // Inflation, consumer prices (annual %)
-                'population' => 'SP.POP.TOTL', // Population, total
-                'exports_gdp' => 'NE.EXP.GNFS.ZS', // Exports of goods and services (% of GDP)
-                'imports_gdp' => 'NE.IMP.GNFS.ZS', // Imports of goods and services (% of GDP)
-            ];
+        // Try retrieving from cache
+        if (Cache::has($cacheKey)) {
+            $cached = Cache::get($cacheKey);
+            if (is_array($cached) && !empty($cached) && !isset($cached['is_fallback'])) {
+                return $cached;
+            }
+        }
 
-            $result = [];
+        $result = [];
 
+        if (!\Illuminate\Support\Facades\Cache::get('offline_api_worldbank')) {
             try {
+                $indicators = [
+                    'gdp' => 'NY.GDP.MKTP.CD', // GDP (current USD)
+                    'inflation' => 'FP.CPI.TOTL.ZG', // Inflation, consumer prices (annual %)
+                    'population' => 'SP.POP.TOTL', // Population, total
+                    'exports_gdp' => 'NE.EXP.GNFS.ZS', // Exports of goods and services (% of GDP)
+                    'imports_gdp' => 'NE.IMP.GNFS.ZS', // Imports of goods and services (% of GDP)
+                ];
+
                 // Fetch all indicators concurrently using HTTP pool to avoid sequential timeouts
                 $responses = Http::pool(function (Pool $pool) use ($countryIso, $indicators) {
                     $requests = [];
@@ -102,17 +113,28 @@ class RiskIntelligenceService
                         }
                     }
                 }
+                
+                if (empty($result)) {
+                    \Illuminate\Support\Facades\Cache::put('offline_api_worldbank', true, 600);
+                }
             } catch (\Exception $e) {
                 Log::error("World Bank API Concurrent Error ({$countryIso}): " . $e->getMessage());
+                \Illuminate\Support\Facades\Cache::put('offline_api_worldbank', true, 600);
             }
+        }
 
-            if (empty($result)) {
-                // Fallback realistic macro data
-                return $this->getMockMacroData($countryIso);
-            }
+        if (empty($result)) {
+            // Fallback realistic macro data
+            $mockData = $this->getMockMacroData($countryIso);
+            $mockData['is_fallback'] = true;
+            // Cache fallback/mock data for max 5 minutes (300 seconds)
+            Cache::put($cacheKey, $mockData, 300);
+            return $mockData;
+        }
 
-            return $result;
-        });
+        // Cache successful response for 30 days (2592000 seconds)
+        Cache::put($cacheKey, $result, 2592000);
+        return $result;
     }
 
     /**
@@ -124,9 +146,17 @@ class RiskIntelligenceService
         $countryIso = strtoupper($countryIso);
         $cacheKey = "rest_country_details_{$countryIso}";
 
-        return Cache::remember($cacheKey, 2592000, function () use ($countryIso) {
+        // Try retrieving from cache
+        if (Cache::has($cacheKey)) {
+            $cached = Cache::get($cacheKey);
+            if (is_array($cached) && !empty($cached) && !isset($cached['is_fallback'])) {
+                return $cached;
+            }
+        }
+
+        if (!\Illuminate\Support\Facades\Cache::get('offline_api_countries_dev')) {
             try {
-                $response = Http::timeout(5)->get("https://countries.dev/alpha/{$countryIso}");
+                $response = Http::timeout(3)->get("https://countries.dev/alpha/{$countryIso}");
 
                 if ($response->successful()) {
                     $info = $response->json();
@@ -147,7 +177,7 @@ class RiskIntelligenceService
                             }
                         }
 
-                        return [
+                        $data = [
                             'official_name' => $info['name'] ?? '',
                             'capital' => $info['capital'] ?? '',
                             'region' => $info['region'] ?? '',
@@ -157,148 +187,158 @@ class RiskIntelligenceService
                             'currency_name' => $currencyName,
                             'languages' => $langs,
                         ];
+
+                        // Cache successful response for 30 days (2592000 seconds)
+                        Cache::put($cacheKey, $data, 2592000);
+                        return $data;
                     }
                 }
             } catch (\Exception $e) {
                 Log::error("countries.dev API Error for {$countryIso}: " . $e->getMessage());
+                \Illuminate\Support\Facades\Cache::put('offline_api_countries_dev', true, 600);
             }
+        }
 
-            // Fallback dictionary untuk negara yang terdaftar di database kita
-            $fallbacks = [
-                'ID' => [
-                    'official_name' => 'Republic of Indonesia',
-                    'capital' => 'Jakarta',
-                    'region' => 'Asia',
-                    'subregion' => 'South-Eastern Asia',
-                    'flag_url' => 'https://flagcdn.com/w320/id.png',
-                    'currency_code' => 'IDR',
-                    'currency_name' => 'Indonesian rupiah',
-                    'languages' => ['Indonesian'],
-                ],
-                'SG' => [
-                    'official_name' => 'Republic of Singapore',
-                    'capital' => 'Singapore',
-                    'region' => 'Asia',
-                    'subregion' => 'South-Eastern Asia',
-                    'flag_url' => 'https://flagcdn.com/w320/sg.png',
-                    'currency_code' => 'SGD',
-                    'currency_name' => 'Singapore dollar',
-                    'languages' => ['English', 'Malay', 'Tamil', 'Chinese'],
-                ],
-                'CN' => [
-                    'official_name' => 'People\'s Republic of China',
-                    'capital' => 'Beijing',
-                    'region' => 'Asia',
-                    'subregion' => 'Eastern Asia',
-                    'flag_url' => 'https://flagcdn.com/w320/cn.png',
-                    'currency_code' => 'CNY',
-                    'currency_name' => 'Chinese yuan',
-                    'languages' => ['Chinese'],
-                ],
-                'US' => [
-                    'official_name' => 'United States of America',
-                    'capital' => 'Washington, D.C.',
-                    'region' => 'Americas',
-                    'subregion' => 'North America',
-                    'flag_url' => 'https://flagcdn.com/w320/us.png',
-                    'currency_code' => 'USD',
-                    'currency_name' => 'United States dollar',
-                    'languages' => ['English'],
-                ],
-                'NL' => [
-                    'official_name' => 'Kingdom of the Netherlands',
-                    'capital' => 'Amsterdam',
-                    'region' => 'Europe',
-                    'subregion' => 'Western Europe',
-                    'flag_url' => 'https://flagcdn.com/w320/nl.png',
-                    'currency_code' => 'EUR',
-                    'currency_name' => 'Euro',
-                    'languages' => ['Dutch'],
-                ],
-                'JP' => [
-                    'official_name' => 'Japan',
-                    'capital' => 'Tokyo',
-                    'region' => 'Asia',
-                    'subregion' => 'Eastern Asia',
-                    'flag_url' => 'https://flagcdn.com/w320/jp.png',
-                    'currency_code' => 'JPY',
-                    'currency_name' => 'Japanese yen',
-                    'languages' => ['Japanese'],
-                ],
-                'DE' => [
-                    'official_name' => 'Federal Republic of Germany',
-                    'capital' => 'Berlin',
-                    'region' => 'Europe',
-                    'subregion' => 'Western Europe',
-                    'flag_url' => 'https://flagcdn.com/w320/de.png',
-                    'currency_code' => 'EUR',
-                    'currency_name' => 'Euro',
-                    'languages' => ['German'],
-                ],
-                'AU' => [
-                    'official_name' => 'Commonwealth of Australia',
-                    'capital' => 'Canberra',
-                    'region' => 'Oceania',
-                    'subregion' => 'Australia and New Zealand',
-                    'flag_url' => 'https://flagcdn.com/w320/au.png',
-                    'currency_code' => 'AUD',
-                    'currency_name' => 'Australian dollar',
-                    'languages' => ['English'],
-                ],
-                'GB' => [
-                    'official_name' => 'United Kingdom of Great Britain and Northern Ireland',
-                    'capital' => 'London',
-                    'region' => 'Europe',
-                    'subregion' => 'Northern Europe',
-                    'flag_url' => 'https://flagcdn.com/w320/gb.png',
-                    'currency_code' => 'GBP',
-                    'currency_name' => 'British pound',
-                    'languages' => ['English'],
-                ],
-                'IN' => [
-                    'official_name' => 'Republic of India',
-                    'capital' => 'New Delhi',
-                    'region' => 'Asia',
-                    'subregion' => 'Southern Asia',
-                    'flag_url' => 'https://flagcdn.com/w320/in.png',
-                    'currency_code' => 'INR',
-                    'currency_name' => 'Indian rupee',
-                    'languages' => ['Hindi', 'English'],
-                ],
-                'MY' => [
-                    'official_name' => 'Malaysia',
-                    'capital' => 'Kuala Lumpur',
-                    'region' => 'Asia',
-                    'subregion' => 'South-Eastern Asia',
-                    'flag_url' => 'https://flagcdn.com/w320/my.png',
-                    'currency_code' => 'MYR',
-                    'currency_name' => 'Malaysian ringgit',
-                    'languages' => ['Malay'],
-                ],
-                'KR' => [
-                    'official_name' => 'Republic of Korea',
-                    'capital' => 'Seoul',
-                    'region' => 'Asia',
-                    'subregion' => 'Eastern Asia',
-                    'flag_url' => 'https://flagcdn.com/w320/kr.png',
-                    'currency_code' => 'KRW',
-                    'currency_name' => 'South Korean won',
-                    'languages' => ['Korean'],
-                ],
-            ];
-
-            return $fallbacks[$countryIso] ?? [
-                'official_name' => 'Unknown Country',
-                'capital' => 'Unknown',
-                'region' => 'Unknown',
-                'subregion' => 'Unknown',
-                'flag_url' => '',
+        // Fallback dictionary untuk negara yang terdaftar di database kita
+        $fallbacks = [
+            'ID' => [
+                'official_name' => 'Republic of Indonesia',
+                'capital' => 'Jakarta',
+                'region' => 'Asia',
+                'subregion' => 'South-Eastern Asia',
+                'flag_url' => 'https://flagcdn.com/w320/id.png',
+                'currency_code' => 'IDR',
+                'currency_name' => 'Indonesian rupiah',
+                'languages' => ['Indonesian'],
+            ],
+            'SG' => [
+                'official_name' => 'Republic of Singapore',
+                'capital' => 'Singapore',
+                'region' => 'Asia',
+                'subregion' => 'South-Eastern Asia',
+                'flag_url' => 'https://flagcdn.com/w320/sg.png',
+                'currency_code' => 'SGD',
+                'currency_name' => 'Singapore dollar',
+                'languages' => ['English', 'Malay', 'Tamil', 'Chinese'],
+            ],
+            'CN' => [
+                'official_name' => 'People\'s Republic of China',
+                'capital' => 'Beijing',
+                'region' => 'Asia',
+                'subregion' => 'Eastern Asia',
+                'flag_url' => 'https://flagcdn.com/w320/cn.png',
+                'currency_code' => 'CNY',
+                'currency_name' => 'Chinese yuan',
+                'languages' => ['Chinese'],
+            ],
+            'US' => [
+                'official_name' => 'United States of America',
+                'capital' => 'Washington, D.C.',
+                'region' => 'Americas',
+                'subregion' => 'North America',
+                'flag_url' => 'https://flagcdn.com/w320/us.png',
                 'currency_code' => 'USD',
-                'currency_name' => 'US Dollar',
-                'languages' => [],
-                'is_fallback' => true
-            ];
-        });
+                'currency_name' => 'United States dollar',
+                'languages' => ['English'],
+            ],
+            'NL' => [
+                'official_name' => 'Kingdom of the Netherlands',
+                'capital' => 'Amsterdam',
+                'region' => 'Europe',
+                'subregion' => 'Western Europe',
+                'flag_url' => 'https://flagcdn.com/w320/nl.png',
+                'currency_code' => 'EUR',
+                'currency_name' => 'Euro',
+                'languages' => ['Dutch'],
+            ],
+            'JP' => [
+                'official_name' => 'Japan',
+                'capital' => 'Tokyo',
+                'region' => 'Asia',
+                'subregion' => 'Eastern Asia',
+                'flag_url' => 'https://flagcdn.com/w320/jp.png',
+                'currency_code' => 'JPY',
+                'currency_name' => 'Japanese yen',
+                'languages' => ['Japanese'],
+            ],
+            'DE' => [
+                'official_name' => 'Federal Republic of Germany',
+                'capital' => 'Berlin',
+                'region' => 'Europe',
+                'subregion' => 'Western Europe',
+                'flag_url' => 'https://flagcdn.com/w320/de.png',
+                'currency_code' => 'EUR',
+                'currency_name' => 'Euro',
+                'languages' => ['German'],
+            ],
+            'AU' => [
+                'official_name' => 'Commonwealth of Australia',
+                'capital' => 'Canberra',
+                'region' => 'Oceania',
+                'subregion' => 'Australia and New Zealand',
+                'flag_url' => 'https://flagcdn.com/w320/au.png',
+                'currency_code' => 'AUD',
+                'currency_name' => 'Australian dollar',
+                'languages' => ['English'],
+            ],
+            'GB' => [
+                'official_name' => 'United Kingdom of Great Britain and Northern Ireland',
+                'capital' => 'London',
+                'region' => 'Europe',
+                'subregion' => 'Northern Europe',
+                'flag_url' => 'https://flagcdn.com/w320/gb.png',
+                'currency_code' => 'GBP',
+                'currency_name' => 'British pound',
+                'languages' => ['English'],
+            ],
+            'IN' => [
+                'official_name' => 'Republic of India',
+                'capital' => 'New Delhi',
+                'region' => 'Asia',
+                'subregion' => 'Southern Asia',
+                'flag_url' => 'https://flagcdn.com/w320/in.png',
+                'currency_code' => 'INR',
+                'currency_name' => 'Indian rupee',
+                'languages' => ['Hindi', 'English'],
+            ],
+            'MY' => [
+                'official_name' => 'Malaysia',
+                'capital' => 'Kuala Lumpur',
+                'region' => 'Asia',
+                'subregion' => 'South-Eastern Asia',
+                'flag_url' => 'https://flagcdn.com/w320/my.png',
+                'currency_code' => 'MYR',
+                'currency_name' => 'Malaysian ringgit',
+                'languages' => ['Malay'],
+            ],
+            'KR' => [
+                'official_name' => 'Republic of Korea',
+                'capital' => 'Seoul',
+                'region' => 'Asia',
+                'subregion' => 'Eastern Asia',
+                'flag_url' => 'https://flagcdn.com/w320/kr.png',
+                'currency_code' => 'KRW',
+                'currency_name' => 'South Korean won',
+                'languages' => ['Korean'],
+            ],
+        ];
+
+        $fallbackData = $fallbacks[$countryIso] ?? [
+            'official_name' => 'Unknown Country',
+            'capital' => 'Unknown',
+            'region' => 'Unknown',
+            'subregion' => 'Unknown',
+            'flag_url' => '',
+            'currency_code' => 'USD',
+            'currency_name' => 'US Dollar',
+            'languages' => [],
+            'is_fallback' => true
+        ];
+
+        // Cache fallback/mock data for max 5 minutes (300 seconds)
+        Cache::put($cacheKey, $fallbackData, 300);
+
+        return $fallbackData;
     }
 
     /**
@@ -311,15 +351,18 @@ class RiskIntelligenceService
         $cacheKey = "exchange_rates_{$baseCurrency}";
 
         return Cache::remember($cacheKey, 43200, function () use ($baseCurrency) {
-            try {
-                $response = Http::timeout(3)->get("https://open.er-api.com/v6/latest/{$baseCurrency}");
+            if (!\Illuminate\Support\Facades\Cache::get('offline_api_exchange_rate')) {
+                try {
+                    $response = Http::timeout(3)->get("https://open.er-api.com/v6/latest/{$baseCurrency}");
 
-                if ($response->successful()) {
-                    $data = $response->json();
-                    return $data['rates'] ?? [];
+                    if ($response->successful()) {
+                        $data = $response->json();
+                        return $data['rates'] ?? [];
+                    }
+                } catch (\Exception $e) {
+                    Log::error("ExchangeRate API Error: " . $e->getMessage());
+                    \Illuminate\Support\Facades\Cache::put('offline_api_exchange_rate', true, 600);
                 }
-            } catch (\Exception $e) {
-                Log::error("ExchangeRate API Error: " . $e->getMessage());
             }
 
             // Fallback basic conversion rates
@@ -351,7 +394,7 @@ class RiskIntelligenceService
         return Cache::remember($cacheKey, 14400, function () use ($query) {
             $apiKey = config('services.gnews.key');
 
-            if (!empty($apiKey)) {
+            if (!empty($apiKey) && !\Illuminate\Support\Facades\Cache::get('offline_api_gnews')) {
                 try {
                     $response = Http::timeout(3)->get('https://gnews.io/api/v4/search', [
                         'q' => $query,
@@ -369,45 +412,49 @@ class RiskIntelligenceService
                     }
                 } catch (\Exception $e) {
                     Log::error("GNews API Error: " . $e->getMessage());
+                    \Illuminate\Support\Facades\Cache::put('offline_api_gnews', true, 600);
                 }
             }
 
             // Jika API Key tidak ada atau limit habis, gunakan Bing News RSS (Berita Riil, Direct Links)
-            try {
-                $rssQuery = urlencode($query);
-                // Menggunakan Bing News RSS karena memberikan direct URL, menghindari 403 CloudFront dari redirector Google
-                $rssUrl = "https://www.bing.com/news/search?q={$rssQuery}&format=rss";
-                $rssResponse = Http::timeout(5)->get($rssUrl);
-                
-                if ($rssResponse->successful()) {
-                    $xml = simplexml_load_string($rssResponse->body());
-                    if ($xml && isset($xml->channel->item)) {
-                        $articles = [];
-                        $count = 0;
-                        foreach ($xml->channel->item as $item) {
-                            if ($count >= 10) break;
+            if (!\Illuminate\Support\Facades\Cache::get('offline_api_bing')) {
+                try {
+                    $rssQuery = urlencode($query);
+                    // Menggunakan Bing News RSS karena memberikan direct URL, menghindari 403 CloudFront dari redirector Google
+                    $rssUrl = "https://www.bing.com/news/search?q={$rssQuery}&format=rss";
+                    $rssResponse = Http::timeout(5)->get($rssUrl);
+                    
+                    if ($rssResponse->successful()) {
+                        $xml = simplexml_load_string($rssResponse->body());
+                        if ($xml && isset($xml->channel->item)) {
+                            $articles = [];
+                            $count = 0;
+                            foreach ($xml->channel->item as $item) {
+                                if ($count >= 10) break;
+                                
+                                $url = (string) $item->link;
+                                
+                                $articles[] = [
+                                    'title' => (string) $item->title,
+                                    'description' => strip_tags((string) $item->description),
+                                    'content' => strip_tags((string) $item->description),
+                                    'source' => ['name' => (string) ($item->source ?? 'Global News')],
+                                    'url' => $url,
+                                    'image' => 'https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?q=80&w=600',
+                                    'publishedAt' => date('Y-m-d\TH:i:s\Z', strtotime((string) $item->pubDate))
+                                ];
+                                $count++;
+                            }
                             
-                            $url = (string) $item->link;
-                            
-                            $articles[] = [
-                                'title' => (string) $item->title,
-                                'description' => strip_tags((string) $item->description),
-                                'content' => strip_tags((string) $item->description),
-                                'source' => ['name' => (string) ($item->source ?? 'Global News')],
-                                'url' => $url,
-                                'image' => 'https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?q=80&w=600',
-                                'publishedAt' => date('Y-m-d\TH:i:s\Z', strtotime((string) $item->pubDate))
-                            ];
-                            $count++;
-                        }
-                        
-                        if (!empty($articles)) {
-                            return $articles;
+                            if (!empty($articles)) {
+                                return $articles;
+                            }
                         }
                     }
+                } catch (\Exception $e) {
+                    Log::error("Bing News RSS Error: " . $e->getMessage());
+                    \Illuminate\Support\Facades\Cache::put('offline_api_bing', true, 600);
                 }
-            } catch (\Exception $e) {
-                Log::error("Bing News RSS Error: " . $e->getMessage());
             }
 
             return $this->getMockNewsData($query);
@@ -433,7 +480,22 @@ class RiskIntelligenceService
 
         foreach ($years as $idx => $year) {
             $mock['gdp'][] = ['year' => $year, 'value' => ($factor * 1e11) * (1 + (0.05 * $idx))];
-            $mock['inflation'][] = ['year' => $year, 'value' => 2.5 + (sin($idx) * 1.5)];
+            
+            // Realistic inflation rates for hyperinflation/high-inflation countries
+            $inflationVal = 2.5 + (sin($idx) * 1.5);
+            if ($countryIso === 'VE') {
+                $inflationVal = 200.0 + ($idx * 15);
+            } elseif ($countryIso === 'ZW') {
+                $inflationVal = 150.0 + ($idx * 10);
+            } elseif ($countryIso === 'AR') {
+                $inflationVal = 140.0 + ($idx * 12);
+            } elseif ($countryIso === 'SD') {
+                $inflationVal = 80.0 + ($idx * 5);
+            } elseif ($countryIso === 'TR') {
+                $inflationVal = 55.0 + ($idx * 3);
+            }
+            $mock['inflation'][] = ['year' => $year, 'value' => $inflationVal];
+            
             $mock['population'][] = ['year' => $year, 'value' => ($countryIso === 'ID') ? (265e6 + ($year - 2018) * 2.5e6) : (5.6e6 + ($year - 2018) * 0.1e6)];
             $mock['exports_gdp'][] = ['year' => $year, 'value' => ($countryIso === 'SG') ? 175.0 : 20.0 + (cos($idx) * 2)];
             $mock['imports_gdp'][] = ['year' => $year, 'value' => ($countryIso === 'SG') ? 145.0 : 18.0 + (sin($idx) * 2)];

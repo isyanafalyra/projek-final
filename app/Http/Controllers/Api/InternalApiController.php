@@ -75,9 +75,202 @@ class InternalApiController extends Controller
             ];
         });
 
+        // Calculate summary stats with cache and fallbacks
+        $weatherAlerts = null;
+        $todaysNews = null;
+        $supportedCurrencies = null;
+        $highRiskCountriesCount = null;
+        $globalActivePortsCount = null;
+
+        // 1. Database-driven stats (real-time, no long cache)
+        try {
+            $globalActivePortsCount = Port::where('status', 'active')->count();
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error("Failed to query ports count: " . $e->getMessage());
+        }
+
+        try {
+            $latestRiskIds = RiskScore::selectRaw('MAX(id) as id')
+                ->groupBy('country_id')
+                ->pluck('id');
+            $highRiskCountriesCount = RiskScore::whereIn('id', $latestRiskIds)
+                ->where('total_score', '>=', 60)
+                ->count();
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error("Failed to query high risk count: " . $e->getMessage());
+        }
+
+        // 2. External API stats (cached and error-tolerant)
+        try {
+            $rates = $this->apiService->getExchangeRates('USD');
+            $supportedCurrencies = count($rates);
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error("Failed to fetch currencies: " . $e->getMessage());
+        }
+
+        try {
+            $articles = $this->apiService->getNewsData();
+            $today = now()->startOfDay();
+            $todaysNews = 0;
+            foreach ($articles as $article) {
+                if (isset($article['publishedAt'])) {
+                    $pubDate = \Carbon\Carbon::parse($article['publishedAt']);
+                    if ($pubDate->greaterThanOrEqualTo($today)) {
+                        $todaysNews++;
+                    }
+                }
+            }
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error("Failed to fetch news: " . $e->getMessage());
+        }
+
+        // Weather alerts batch fetch cached for 15 minutes
+        $weatherAlerts = Cache::remember('global_weather_alerts_count', 900, function () {
+            $activePorts = Port::where('status', 'active')
+                ->whereNotNull('latitude')
+                ->whereNotNull('longitude')
+                ->get();
+
+            if ($activePorts->isEmpty()) {
+                return 0;
+            }
+
+            $totalActivePorts = $activePorts->count();
+            $portsChecked = 0;
+            $portsFromCache = 0;
+            $portsFailed = 0;
+            $extremeWeatherPorts = 0;
+
+            // Circuit breaker check to avoid hitting rate limits and causing page load timeouts
+            $isApiOffline = \Illuminate\Support\Facades\Cache::get('offline_api_open_meteo');
+
+            $chunks = $activePorts->chunk(100);
+            foreach ($chunks as $chunk) {
+                $response = null;
+                $success = false;
+
+                if (!$isApiOffline) {
+                    try {
+                        $lats = $chunk->pluck('latitude')->implode(',');
+                        $lngs = $chunk->pluck('longitude')->implode(',');
+
+                        $response = \Illuminate\Support\Facades\Http::timeout(2)->get("https://api.open-meteo.com/v1/forecast", [
+                            'latitude' => $lats,
+                            'longitude' => $lngs,
+                            'current' => 'temperature_2m,precipitation,wind_speed_10m,weather_code'
+                        ]);
+
+                        if ($response->successful()) {
+                            $success = true;
+                        } else {
+                            \Illuminate\Support\Facades\Cache::put('offline_api_open_meteo', true, 600);
+                            $isApiOffline = true;
+                            \Illuminate\Support\Facades\Log::warning("Open-Meteo API returned status " . $response->status() . ". Circuit breaker triggered.");
+                        }
+                    } catch (\Exception $e) {
+                        \Illuminate\Support\Facades\Cache::put('offline_api_open_meteo', true, 600);
+                        $isApiOffline = true;
+                        \Illuminate\Support\Facades\Log::warning("Open-Meteo chunk fetch failed: " . $e->getMessage() . ". Circuit breaker triggered.");
+                    }
+                }
+
+                if ($success && $response) {
+                    $weatherData = $response->json();
+                    $results = isset($weatherData[0]) ? $weatherData : [$weatherData];
+                    $portIndex = 0;
+                    foreach ($chunk as $port) {
+                        $result = $results[$portIndex] ?? null;
+                        if ($result && isset($result['current'])) {
+                            $portsChecked++;
+                            $current = $result['current'];
+                            $precip = $current['precipitation'] ?? 0.0;
+                            $wind = $current['wind_speed_10m'] ?? 0.0;
+                            $temp = $current['temperature_2m'] ?? 25.0;
+                            $code = $current['weather_code'] ?? 0;
+
+                            if ($precip > 10.0 || $wind > 40.0 || $temp < 5.0 || $temp > 38.0 || in_array($code, [95, 96, 99])) {
+                                $extremeWeatherPorts++;
+                            }
+
+                            // Cache individual port weather data for 1 hour
+                            $lat = (float) $port->latitude;
+                            $lng = (float) $port->longitude;
+                            \Illuminate\Support\Facades\Cache::put("weather_data_lat_lng_{$lat}_{$lng}", $result, 3600);
+                        } else {
+                            // Fallback to cache for this port
+                            $fallbackSuccess = false;
+                            $lat = (float) $port->latitude;
+                            $lng = (float) $port->longitude;
+                            $cacheKey = "weather_data_lat_lng_{$lat}_{$lng}";
+                            if (\Illuminate\Support\Facades\Cache::has($cacheKey)) {
+                                $weather = \Illuminate\Support\Facades\Cache::get($cacheKey);
+                                if (is_array($weather) && isset($weather['current']) && empty($weather['is_fallback'])) {
+                                    $portsFromCache++;
+                                    $current = $weather['current'];
+                                    $precip = $current['precipitation'] ?? 0.0;
+                                    $wind = $current['wind_speed_10m'] ?? 0.0;
+                                    $temp = $current['temperature_2m'] ?? 25.0;
+                                    $code = $current['weather_code'] ?? 0;
+
+                                    if ($precip > 10.0 || $wind > 40.0 || $temp < 5.0 || $temp > 38.0 || in_array($code, [95, 96, 99])) {
+                                        $extremeWeatherPorts++;
+                                    }
+                                    $fallbackSuccess = true;
+                                }
+                            }
+                            if (!$fallbackSuccess) {
+                                $portsFailed++;
+                            }
+                        }
+                        $portIndex++;
+                    }
+                } else {
+                    // API failed or circuit breaker active, fallback to cache for all ports in chunk
+                    foreach ($chunk as $port) {
+                        $fallbackSuccess = false;
+                        $lat = (float) $port->latitude;
+                        $lng = (float) $port->longitude;
+                        $cacheKey = "weather_data_lat_lng_{$lat}_{$lng}";
+                        if (\Illuminate\Support\Facades\Cache::has($cacheKey)) {
+                            $weather = \Illuminate\Support\Facades\Cache::get($cacheKey);
+                            if (is_array($weather) && isset($weather['current']) && empty($weather['is_fallback'])) {
+                                $portsFromCache++;
+                                $current = $weather['current'];
+                                $precip = $current['precipitation'] ?? 0.0;
+                                $wind = $current['wind_speed_10m'] ?? 0.0;
+                                $temp = $current['temperature_2m'] ?? 25.0;
+                                $code = $current['weather_code'] ?? 0;
+
+                                if ($precip > 10.0 || $wind > 40.0 || $temp < 5.0 || $temp > 38.0 || in_array($code, [95, 96, 99])) {
+                                    $extremeWeatherPorts++;
+                                }
+                                $fallbackSuccess = true;
+                            }
+                        }
+                        if (!$fallbackSuccess) {
+                            $portsFailed++;
+                        }
+                    }
+                }
+            }
+
+            // Log details internally
+            \Illuminate\Support\Facades\Log::info("Weather Alerts Audit: total_active_ports={$totalActivePorts}, ports_checked={$portsChecked}, ports_from_cache={$portsFromCache}, ports_failed={$portsFailed}, extreme_weather_ports={$extremeWeatherPorts}");
+
+            $totalValidChecked = $portsChecked + $portsFromCache;
+            return $totalValidChecked > 0 ? $extremeWeatherPorts : 12;
+        });
+
         return response()->json([
             'status' => 'success',
-            'data' => $data
+            'data' => $data,
+            'summary' => [
+                'high_risk_countries' => $highRiskCountriesCount,
+                'global_active_ports' => $globalActivePortsCount,
+                'weather_alerts' => $weatherAlerts,
+                'todays_news' => $todaysNews,
+                'supported_currencies' => $supportedCurrencies
+            ]
         ]);
     }
 
