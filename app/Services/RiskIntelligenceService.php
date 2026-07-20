@@ -387,7 +387,7 @@ class RiskIntelligenceService
      * Jika API key tidak ada, otomatis memuat mock berita berkualitas.
      * Cache duration: 4 Jam (14400 detik)
      */
-    public function getNewsData(string $query = 'logistik OR "rantai pasok" OR ekspor'): array
+    public function getNewsData(string $query = 'global supply chain OR logistics OR shipping OR freight OR trade OR port'): array
     {
         $cacheKey = "gnews_data_" . md5($query);
 
@@ -398,7 +398,7 @@ class RiskIntelligenceService
                 try {
                     $response = Http::timeout(3)->get('https://gnews.io/api/v4/search', [
                         'q' => $query,
-                        'lang' => 'id',
+                        'lang' => 'en',
                         'apikey' => $apiKey,
                         'max' => 10
                     ]);

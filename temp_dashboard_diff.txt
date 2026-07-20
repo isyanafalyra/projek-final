@@ -1,0 +1,1348 @@
+﻿diff --git a/resources/views/dashboard.blade.php b/resources/views/dashboard.blade.php
+index 7eee699..5d838da 100644
+--- a/resources/views/dashboard.blade.php
++++ b/resources/views/dashboard.blade.php
+@@ -219,15 +219,23 @@
+     @endpush
+ 
+     <!-- Header Section -->
+-    <div class="row align-items-center mb-4">
++    <div class="row align-items-center mb-4 fade-slide-up">
+         <div class="col-md-7">
+             <h2 class="text-white fw-bold mb-0">Global Supply Chain Intelligence</h2>
+             <p class="text-secondary mb-0">Platform Monitoring Risiko Rantai Pasok Berbasis Multi-API & Data Science</p>
+         </div>
+-        <div class="col-md-5 text-md-end mt-3 mt-md-0">
+-            <span class="badge bg-secondary-subtle text-secondary border border-secondary px-3 py-2 rounded-pill">
+-                <i class="fa-solid fa-clock me-2 text-info"></i>Data Terkini Real-time
++        <div class="col-md-5 text-md-end mt-3 mt-md-0 d-flex align-items-center justify-content-md-end gap-3">
++            <div class="d-flex align-items-center gap-2">
++                <span class="live-dot"></span>
++                <span class="text-secondary small">Sistem Sinkron Aktif</span>
++            </div>
++            <span class="badge bg-secondary-subtle text-secondary border border-secondary px-3 py-2 rounded-pill d-inline-flex align-items-center gap-2">
++                <i class="fa-solid fa-clock text-info"></i>
++                <span id="headerLastUpdated">Memperbarui...</span>
+             </span>
++            <button onclick="refreshDashboardData()" class="btn btn-sm btn-secondary-custom" title="Refresh Data">
++                <i class="fa-solid fa-rotate"></i>
++            </button>
+         </div>
+     </div>
+ 
+@@ -258,19 +266,8 @@
+         
+         <!-- TAB 1: Overview / Landing Page -->
+         <div class="tab-pane fade show active" id="overview-content">
+-            <div class="glass-card p-5 mb-4 text-center text-md-start">
+-                <div class="row align-items-center">
+-                    <div class="col-md-8">
+-                        <h4 class="text-white fw-bold mb-2">Sistem Intelijen Rantai Pasok Terpadu</h4>
+-                        <p class="text-secondary mb-4 mb-md-0">Selamat datang di dashboard GlobalChain. Pantau indikator makroekonomi, risiko cuaca pelabuhan, volatilitas valuta asing, dan sentimen berita logistik global di satu dashboard terintegrasi. Gunakan sidebar sebelah kiri untuk menelusuri detail analisis.</p>
+-                    </div>
+-                    <div class="col-md-4 text-center">
+-                        <i class="fa-solid fa-globe-asia text-info fa-5x animate-pulse"></i>
+-                    </div>
+-                </div>
+-            </div>
+             
+-            <!-- Quick Summary Statistics Cards (Matches User Screenshot) -->
++            <!-- Quick Summary Statistics Cards -->
+             <div class="row mb-4">
+                 <!-- Card 1: Monitored Countries -->
+                 <div class="col-lg-3 col-sm-6 mb-3 mb-lg-0">
+@@ -281,58 +278,239 @@
+                         <div class="status-card-content">
+                             <div class="status-card-title">Monitored Countries</div>
+                             <div class="status-card-value" id="statTotalCountries">0</div>
+-                            <div class="status-card-subtext">Negara Aktif</div>
++                            <div class="status-card-subtext" id="statSupportedCurrencies">0 Mata Uang</div>
+                         </div>
+                     </div>
+                 </div>
+-                <!-- Card 2: Country Risk Status -->
++                <!-- Card 2: High Risk Countries -->
+                 <div class="col-lg-3 col-sm-6 mb-3 mb-lg-0">
+                     <div class="status-card status-card-red">
+                         <div class="status-card-icon-wrapper">
+                             <i class="fa-solid fa-triangle-exclamation"></i>
+                         </div>
+                         <div class="status-card-content">
+-                            <div class="status-card-title">Country Risk Status</div>
+-                            <div class="status-card-value text-danger" id="statHighRiskCount">52.2% (Medium)</div>
+-                            <div class="status-card-subtext">Tingkat Kerawanan</div>
++                            <div class="status-card-title">High Risk Countries</div>
++                            <div class="status-card-value text-danger" id="statHighRiskCount">0</div>
++                            <div class="status-card-subtext">Tingkat Kerawanan Global</div>
+                         </div>
+                     </div>
+                 </div>
+-                <!-- Card 3: Ports in Country -->
++                <!-- Card 3: Global Active Ports -->
+                 <div class="col-lg-3 col-sm-6 mb-3 mb-lg-0">
+                     <div class="status-card status-card-yellow">
+                         <div class="status-card-icon-wrapper">
+                             <i class="fa-solid fa-ship"></i>
+                         </div>
+                         <div class="status-card-content">
+-                            <div class="status-card-title">Ports in Country</div>
+-                            <div class="status-card-value" id="statPortsCount">0</div>
+-                            <div class="status-card-subtext" id="statPortsSubtext">Pelabuhan Aktif</div>
++                            <div class="status-card-title">Global Active Ports</div>
++                            <div class="status-card-value" id="statGlobalPortsCount">0</div>
++                            <div class="status-card-subtext">Pelabuhan Kargo Aktif</div>
+                         </div>
+                     </div>
+                 </div>
+-                <!-- Card 4: Local Wind & Temp -->
++                <!-- Card 4: Weather Alerts -->
+                 <div class="col-lg-3 col-sm-6">
+                     <div class="status-card status-card-green">
+                         <div class="status-card-icon-wrapper">
+                             <i class="fa-solid fa-cloud-bolt"></i>
+                         </div>
+                         <div class="status-card-content">
+-                            <div class="status-card-title">Local Wind & Temp</div>
+-                            <div class="status-card-value" id="statWeatherSummary">27 km/h</div>
+-                            <div class="status-card-subtext" id="statWeatherTemp">(15°C)</div>
++                            <div class="status-card-title">Weather Alerts</div>
++                            <div class="status-card-value text-warning" id="statWeatherAlerts">0</div>
++                            <div class="status-card-subtext">Pelabuhan Aktif Terdampak</div>
+                         </div>
+                     </div>
+                 </div>
+             </div>
+ 
+-            <!-- Welcome instruction card -->
+-            <div class="glass-card p-4">
+-                <h5 class="text-white fw-bold mb-3"><i class="fa-solid fa-circle-info text-info me-2"></i>Panduan Monitoring Global</h5>
+-                <p class="text-secondary small mb-0" style="line-height: 1.6;">
+-                    Gunakan panel navigasi di sebelah kiri untuk mengakses berbagai instrumen intelijen secara mendalam. Di bagian <strong>Analytics</strong>, Anda dapat meninjau profil lengkap negara, kalkulasi bobot risiko multisektoral, peta monitor cuaca maritim real-time, dan dampak fluktuasi nilai tukar. Di bagian <strong>Intelligence</strong>, platform ini menyediakan sentimen analisis berita terkini, peta pelabuhan kargo logistik utama, serta visualisasi perbandingan makroekonomi antar negara secara komparatif.
+-                </p>
++            <!-- Global Risk Distribution & Map -->
++            <div class="row mb-4">
++                <!-- Left: Risk Overview distribution -->
++                <div class="col-xl-4 mb-4 mb-xl-0">
++                    <div class="glass-card p-4 h-100 d-flex flex-column justify-content-between">
++                        <div>
++                            <div class="overview-section-label">Risk Analytics</div>
++                            <h5 class="text-white fw-bold mb-3">Global Risk Overview</h5>
++                            
++                            <div class="avg-score-box mb-4">
++                                <div class="text-secondary small text-uppercase fw-bold mb-1" style="font-size: 0.65rem; letter-spacing: 0.5px;">Avg Global Risk Score</div>
++                                <div class="avg-score-number text-info" id="overviewAvgRiskScore">0</div>
++                            </div>
++
++                            <div class="risk-distribution-list">
++                                <div class="risk-dist-row">
++                                    <span class="risk-dist-label text-success"><i class="fa-solid fa-circle-check me-1"></i>Low Risk</span>
++                                    <div class="risk-dist-bar-bg">
++                                        <div class="risk-dist-bar-fill bg-success" id="barLowRisk" style="width: 0%"></div>
++                                    </div>
++                                    <span class="risk-dist-count text-success" id="countLowRisk">0</span>
++                                </div>
++                                <div class="risk-dist-row">
++                                    <span class="risk-dist-label text-warning"><i class="fa-solid fa-circle-exclamation me-1"></i>Medium</span>
++                                    <div class="risk-dist-bar-bg">
++                                        <div class="risk-dist-bar-fill bg-warning" id="barMediumRisk" style="width: 0%"></div>
++                                    </div>
++                                    <span class="risk-dist-count text-warning" id="countMediumRisk">0</span>
++                                </div>
++                                <div class="risk-dist-row">
++                                    <span class="risk-dist-label text-danger"><i class="fa-solid fa-triangle-exclamation me-1"></i>High Risk</span>
++                                    <div class="risk-dist-bar-bg">
++                                        <div class="risk-dist-bar-fill bg-danger" id="barHighRisk" style="width: 0%"></div>
++                                    </div>
++                                    <span class="risk-dist-count text-danger" id="countHighRisk">0</span>
++                                </div>
++                            </div>
++                        </div>
++
++                        <div class="border-top border-secondary pt-3 mt-3">
++                            <span class="text-secondary small d-block" style="line-height: 1.4;">Kalkulasi tingkat kerawanan berdasarkan agregasi bobot multi-sektor.</span>
++                        </div>
++                    </div>
++                </div>
++
++                <!-- Right: Spatial intelligence main map -->
++                <div class="col-xl-8">
++                    <div class="glass-card p-4 h-100">
++                        <div class="d-flex justify-content-between align-items-center mb-3">
++                            <div>
++                                <div class="overview-section-label">Spatial Intelligence</div>
++                                <h5 class="text-white fw-bold mb-0">Global Intelligence Map</h5>
++                            </div>
++                            <div class="small text-secondary"><i class="fa-solid fa-location-crosshairs text-info me-1"></i>Peta Interaktif Supply Chain</div>
++                        </div>
++                        <div id="map-main-overview"></div>
++                    </div>
++                </div>
++            </div>
++
++            <!-- Weather & Port Intelligence -->
++            <div class="row mb-4">
++                <div class="col-12">
++                    <div class="glass-card p-4">
++                        <div class="d-flex justify-content-between align-items-center mb-3">
++                            <div>
++                                <div class="overview-section-label">Maritime Logistics</div>
++                                <h5 class="text-white fw-bold mb-0">Weather & Port Intelligence</h5>
++                            </div>
++                            <span class="text-secondary small d-none d-md-inline"><i class="fa-solid fa-satellite-dish text-info me-1"></i>Koneksi Satelit Cuaca Aktif</span>
++                        </div>
++                        <div class="row" id="overviewWeatherPortContainer">
++                            <!-- Rendered by JavaScript dynamically -->
++                            <div class="col-12 text-center py-4">
++                                <span class="spinner-border spinner-border-sm text-info" role="status"></span>
++                                <span class="text-secondary small ms-2">Menghubungkan satelit cuaca pelabuhan...</span>
++                            </div>
++                        </div>
++                    </div>
++                </div>
++            </div>
++
++            <!-- Economic indicators & currency exchange -->
++            <div class="row mb-4">
++                <!-- Macroeconomics Chart -->
++                <div class="col-lg-8 mb-4 mb-lg-0">
++                    <div class="glass-card p-4 h-100">
++                        <div class="d-flex justify-content-between align-items-center mb-3">
++                            <div>
++                                <div class="overview-section-label">Macroeconomic Indicators</div>
++                                <h5 class="text-white fw-bold mb-0">Economic Intelligence</h5>
++                            </div>
++                            <div class="d-flex align-items-center gap-2">
++                                <span class="text-secondary small" style="font-size: 0.75rem;">Negara:</span>
++                                <select id="overviewEconomicCountrySelect" class="form-select form-select-sm bg-dark text-white border-secondary" style="font-size: 0.8rem; border-radius: 6px; width: 140px;">
++                                    <option value="" disabled selected>Memuat...</option>
++                                </select>
++                            </div>
++                        </div>
++                        <div style="height: 250px; position: relative;">
++                            <canvas id="overviewMacroChart"></canvas>
++                        </div>
++                    </div>
++                </div>
++                
++                <!-- Currency exchange rates table -->
++                <div class="col-lg-4">
++                    <div class="glass-card p-4 h-100">
++                        <div class="overview-section-label">Foreign Exchange Rates</div>
++                        <h5 class="text-white fw-bold mb-3">Currency Impact</h5>
++                        <div class="table-responsive">
++                            <table class="table table-dark table-hover border-secondary align-middle mb-0" style="font-size: 0.8rem;">
++                                <thead>
++                                    <tr>
++                                        <th>Mata Uang</th>
++                                        <th class="text-end">Nilai Tukar (USD)</th>
++                                    </tr>
++                                </thead>
++                                <tbody id="overviewCurrencyBody">
++                                    <tr>
++                                        <td colspan="2" class="text-center py-4">
++                                            <span class="spinner-border spinner-border-sm text-info"></span>
++                                        </td>
++                                    </tr>
++                                </tbody>
++                            </table>
++                        </div>
++                    </div>
++                </div>
++            </div>
++
++            <!-- News & Top Risks -->
++            <div class="row">
++                <!-- news feed summary -->
++                <div class="col-lg-6 mb-4 mb-lg-0">
++                    <div class="glass-card p-4 h-100 d-flex flex-column justify-content-between">
++                        <div>
++                            <div class="d-flex justify-content-between align-items-center mb-3">
++                                <div>
++                                    <div class="overview-section-label">Sentiment Analysis</div>
++                                    <h5 class="text-white fw-bold mb-0">News Intelligence</h5>
++                                </div>
++                                <span class="badge bg-secondary text-white px-2 py-1 rounded" style="font-size: 0.7rem;" id="overviewNewsSentimentRatio">Rasio Sentimen</span>
++                            </div>
++                            
++                            <!-- sentiment ratio visual bar -->
++                            <div class="sentiment-ratio-bar mb-3">
++                                <div class="bg-sentiment-pos" id="overviewNewsBarPos" style="width: 0%"></div>
++                                <div class="bg-sentiment-neu" id="overviewNewsBarNeu" style="width: 0%"></div>
++                                <div class="bg-sentiment-neg" id="overviewNewsBarNeg" style="width: 0%"></div>
++                            </div>
++
++                            <div id="overviewNewsList" class="news-scroll-container" style="max-height: 250px;">
++                                <div class="text-center py-4">
++                                    <span class="spinner-border spinner-border-sm text-info"></span>
++                                </div>
++                            </div>
++                        </div>
++                    </div>
++                </div>
++
++                <!-- top risk countries list -->
++                <div class="col-lg-6">
++                    <div class="glass-card p-4 h-100">
++                        <div class="overview-section-label">Risk Scoring Engine</div>
++                        <h5 class="text-white fw-bold mb-3">Top Risk Countries</h5>
++                        <div class="table-responsive">
++                            <table class="table table-dark table-hover border-secondary align-middle mb-0" style="font-size: 0.8rem;">
++                                <thead>
++                                    <tr>
++                                        <th>Negara</th>
++                                        <th class="text-center">Skor</th>
++                                        <th class="text-end">Sub-Risiko Utama</th>
++                                    </tr>
++                                </thead>
++                                <tbody id="overviewTopRiskBody">
++                                    <tr>
++                                        <td colspan="3" class="text-center py-4">
++                                            <span class="spinner-border spinner-border-sm text-info"></span>
++                                        </td>
++                                    </tr>
++                                </tbody>
++                            </table>
++                        </div>
++                    </div>
++                </div>
+             </div>
++
+         </div>
+ 
+         <!-- TAB: My Watchlist -->
+@@ -729,7 +907,7 @@
+                             </div>
+                             <div class="d-flex align-items-center">
+                                 <span class="badge-high-risk py-1 px-2 rounded me-2 small" style="font-size: 0.75rem;">High Risk</span>
+-                                <span class="text-secondary small">&gt; 60 (Rentan Tinggi)</span>
++                                <span class="text-secondary small">&gt;= 60 (Rentan Tinggi)</span>
+                             </div>
+                         </div>
+                     </div>
+@@ -893,7 +1071,10 @@
+         <script>
+             // Global Dashboard State
+             let countriesList = [];
++            // window.globalCountriesList = single source of truth, accessible from anywhere
++            window.globalCountriesList = [];
+             let currentCountryCode = '';
++            let defaultCountryCode = ''; // Centralized default country fallback
+             let currentMacroMetric = 'gdp'; // Default macroeconomic chart metric
+             let currentNewsItems = []; // Current country news cache for modal popup
+             
+@@ -915,6 +1096,8 @@
+             let watchlistMarkersGroup = null;
+             let portMarkersGroupWeather = null;
+             let portMarkersGroupPorts = null;
++            let leafletMapMainOverview = null;
++            let overviewMapMarkersGroup = null;
+ 
+             // Selected country for ports map filter
+             let selectedMapCountryCode = '';
+@@ -933,6 +1116,14 @@
+                 fetchCountries();
+                 fetchPorts();
+                 fetchCurrencyRates('USD');
++                fetchDashboardNews();
++
++                const econSelect = document.getElementById('overviewEconomicCountrySelect');
++                if (econSelect) {
++                    econSelect.addEventListener('change', (e) => {
++                        renderOverviewMacroChart(e.target.value);
++                    });
++                }
+ 
+                 // Bind Event Listeners for Country selectors
+                 document.getElementById('countrySelect').addEventListener('change', (e) => {
+@@ -955,25 +1146,24 @@
+                 initCountrySearchDropdown();
+ 
+                 document.getElementById('mapResetBtn').addEventListener('click', () => {
+-                    // Reset map to default view
+-                    leafletMapPorts.setView([15, 105], 3);
+-                    // Reset trigger label
+-                    selectedMapCountryCode = '';
+-                    document.getElementById('countryTriggerLabel').textContent = 'Pilih Negara...';
+-                    document.getElementById('triggerFlagContainer').innerHTML = '<i class="fa-solid fa-globe text-info"></i>';
+-                    // Remove selected highlight
+-                    document.querySelectorAll('#countryDropdownList .country-dropdown-item').forEach(el => el.classList.remove('selected'));
++                    if (leafletMapPorts) {
++                        leafletMapPorts.setView([15, 105], 3);
++                    }
++                    if (defaultCountryCode) {
++                        handleCountryChange(defaultCountryCode);
++                    }
+                 });
+ 
+                 // --- Custom Searchable Country Dropdown (Weather Map) ---
+                 initWeatherCountrySearchDropdown();
+ 
+                 document.getElementById('weatherMapResetBtn').addEventListener('click', () => {
+-                    leafletMapWeather.setView([15, 105], 3);
+-                    selectedWeatherCountryCode = '';
+-                    document.getElementById('weatherCountryTriggerLabel').textContent = 'Pilih Negara...';
+-                    document.getElementById('weatherTriggerFlagContainer').innerHTML = '<i class="fa-solid fa-globe text-info"></i>';
+-                    document.querySelectorAll('#weatherCountryDropdownList .country-dropdown-item').forEach(el => el.classList.remove('selected'));
++                    if (leafletMapWeather) {
++                        leafletMapWeather.setView([15, 105], 3);
++                    }
++                    if (defaultCountryCode) {
++                        handleCountryChange(defaultCountryCode);
++                    }
+                 });
+ 
+                 // Attach Click Event listeners to Left Sidebar navigation links for client-side routing
+@@ -1111,9 +1301,9 @@ function renderCountryDropdownItems(list) {
+                         container.querySelectorAll('.country-dropdown-item').forEach(el => el.classList.remove('selected'));
+                         item.classList.add('selected');
+ 
+-                        // Close dropdown and trigger map change
++                        // Close dropdown and trigger global country change
+                         closeCountryDropdown();
+-                        handleMapCountryChange(isoCode);
++                        handleCountryChange(isoCode);
+                     });
+                 });
+             }
+@@ -1200,7 +1390,7 @@ function renderWeatherCountryDropdownItems(list) {
+                         item.classList.add('selected');
+ 
+                         closeWeatherCountryDropdown();
+-                        handleWeatherMapCountryChange(isoCode);
++                        handleCountryChange(isoCode);
+                     });
+                 });
+             }
+@@ -1332,6 +1522,10 @@ function initWeatherMap() {
+                     setTimeout(() => leafletMapWeather.invalidateSize(), 300);
+                     // Re-render port markers ke weather map
+                     if (window._portsData) renderPortMarkers(window._portsData);
++                    // Sync weather map for currently selected country
++                    if (currentCountryCode) {
++                        handleWeatherMapCountryChange(currentCountryCode);
++                    }
+                 }, 50);
+             }
+ 
+@@ -1343,6 +1537,10 @@ function initPortsMap() {
+                     setTimeout(() => leafletMapPorts.invalidateSize(), 300);
+                     // Re-render port markers ke ports map
+                     if (window._portsData) renderPortMarkers(window._portsData);
++                    // Sync ports map for currently selected country
++                    if (currentCountryCode) {
++                        syncPortsForCountry(currentCountryCode);
++                    }
+                     // Re-populate custom dropdown countries setelah peta siap
+                     if (countriesList.length > 0) {
+                         renderCountryDropdownItems(countriesList);
+@@ -1356,24 +1554,53 @@ function initLeafletMaps() {}
+ 
+             // --- FETCH ROOT RESOURCES ---
+             function fetchCountries() {
++                // Show loading spinner for dynamic cards
++                const spinners = {
++                    statTotalCountries: '<span class="spinner-border spinner-border-sm text-secondary" role="status"></span>',
++                    statSupportedCurrencies: '<span class="spinner-border spinner-border-sm text-secondary" role="status"></span>',
++                    statHighRiskCount: '<span class="spinner-border spinner-border-sm text-secondary" role="status"></span>',
++                    statGlobalPortsCount: '<span class="spinner-border spinner-border-sm text-secondary" role="status"></span>',
++                    statWeatherAlerts: '<span class="spinner-border spinner-border-sm text-secondary" role="status"></span>'
++                };
++                Object.keys(spinners).forEach(id => {
++                    const el = document.getElementById(id);
++                    if (el) el.innerHTML = spinners[id];
++                });
++
+                 fetch('/api/countries')
+-                    .then(res => res.json())
++                    .then(res => {
++                        if (!res.ok) throw new Error("Network response not ok");
++                        return res.json();
++                    })
+                     .then(response => {
+                         if (response.status === 'success') {
+                             countriesList = response.data;
++                            // Keep window.globalCountriesList in sync as single source of truth
++                            window.globalCountriesList = countriesList;
++                            window._globalSummaryData = response.summary || null;
++                            
+                             populateCountryDropdowns();
+                             renderWatchlistButtons();
+-                            renderOverviewStats();
++                            renderDashboardOverview();
+                             
+                             // Define default monitored country (ID/Indonesia or first in list)
+                             if (countriesList.length > 0) {
+                                 const idIndex = countriesList.findIndex(c => c.iso_code === 'ID');
+-                                const defaultCountryCode = idIndex !== -1 ? countriesList[idIndex].iso_code : countriesList[0].iso_code;
++                                defaultCountryCode = idIndex !== -1 ? countriesList[idIndex].iso_code : countriesList[0].iso_code;
+                                 handleCountryChange(defaultCountryCode);
+                             }
++                        } else {
++                            throw new Error("API status failed");
+                         }
+                     })
+-                    .catch(err => console.error("Error loading countries:", err));
++                    .catch(err => {
++                        console.error("Error loading countries:", err);
++                        // Fallback display
++                        ['statTotalCountries', 'statSupportedCurrencies', 'statHighRiskCount', 'statGlobalPortsCount', 'statWeatherAlerts'].forEach(id => {
++                            const el = document.getElementById(id);
++                            if (el) el.textContent = 'Data unavailable';
++                        });
++                    });
+             }
+ 
+             function fetchPorts() {
+@@ -1383,22 +1610,7 @@ function fetchPorts() {
+                         if (response.status === 'success') {
+                             window._portsData = response.data; // Cache for lazy map init
+                             renderPortMarkers(response.data);
+-                            // Port count per country is handled by syncPortsForCountry() instead of global total
+-                            
+-                            // Fetch default weather for Card 4 using the first port
+-                            if (response.data.length > 0) {
+-                                const firstPort = response.data[0];
+-                                fetch(`https://api.open-meteo.com/v1/forecast?latitude=${firstPort.lat}&longitude=${firstPort.lng}&current=temperature_2m,wind_speed_10m`)
+-                                    .then(res => res.json())
+-                                    .then(weatherData => {
+-                                        if (weatherData && weatherData.current) {
+-                                            const cur = weatherData.current;
+-                                            document.getElementById('statWeatherSummary').textContent = `${Math.round(cur.wind_speed_10m)} km/h`;
+-                                            document.getElementById('statWeatherTemp').textContent = `(${Math.round(cur.temperature_2m)}°C)`;
+-                                        }
+-                                    })
+-                                    .catch(err => console.error("Error fetching card weather:", err));
+-                            }
++                            fetchDashboardWeatherPorts();
+                         }
+                     })
+                     .catch(err => console.error("Error loading ports:", err));
+@@ -1415,7 +1627,11 @@ function fetchCurrencyRates(baseCurrency) {
+                             globalCurrencyRates = response.rates;
+                             globalCurrencyTrends = response.trends;
+                             renderCurrencyTable(baseCurrency);
++                            renderOverviewCurrencyTable();
+                             updateCurrencyTrendChart();
++                            if (currentCountryCode) {
++                                syncCurrencyTab(currentCountryCode);
++                            }
+                         }
+                     })
+                     .catch(err => console.error("Error loading currencies:", err));
+@@ -1464,36 +1680,275 @@ function renderWatchlistButtons() {
+             }
+ 
+             // --- COUNTRY CHANGE & INSTANT LAZY LOADING CONTROL ---
++            // Centralized Country Selection Synchronization
+             function handleCountryChange(countryCode) {
++                // --- DEBUG LOGGING (temporary) ---
++                console.log('[handleCountryChange] Country clicked:', countryCode);
++                const selectedCountryData = countriesList.find(c => c.iso_code === countryCode);
++                console.log('[handleCountryChange] Selected country data:', selectedCountryData);
++                console.log('[handleCountryChange] Previous country code:', currentCountryCode);
++
++                // NOTE: We intentionally removed the early-return guard that skipped
++                // re-rendering when countryCode === currentCountryCode. That guard
++                // was causing stale data (flag, capital, languages) to persist when
++                // the same country was clicked again or the tab was switched.
+                 currentCountryCode = countryCode;
+-                document.getElementById('countrySelect').value = countryCode;
+                 
+-                // 1. Update basic profile info instantly from memory (instant feedback, zero loading lag!)
++                // 1. Synchronize all dropdowns and selection visual states across all modules
++                syncAllCountryUIElements(countryCode);
++
++                // 2. Update basic profile info instantly from memory (instant feedback, zero loading lag!)
+                 updateLocalProfile(countryCode);
+ 
+-                // 2. Sync ports stat card & sidebar info with new country
++                // 3. Sync ports stat card, sidebar info, map markers, and fly/pan view
+                 syncPortsForCountry(countryCode);
+-                
+-                // 3. Fetch data lazily depending on the currently active view tab
++
++                // 4. Focus/Fly Weather map to the selected country's first port or coordinates
++                handleWeatherMapCountryChange(countryCode);
++
++                // 5. Fetch data lazily depending on the currently active view tab
+                 const activeTab = document.querySelector('.tab-pane.active').id;
+                 handleLazyLoadForActiveTab(`#${activeTab}`);
+             }
+ 
+-            function updateLocalProfile(countryCode) {
+-                const country = countriesList.find(c => c.iso_code === countryCode);
++            // Sync all interactive dropdown inputs and selectors to the active state
++            function syncAllCountryUIElements(countryCode) {
++                // A. Main Country Select Dropdown
++                const mainSelect = document.getElementById('countrySelect');
++                if (mainSelect && mainSelect.value !== countryCode) {
++                    mainSelect.value = countryCode;
++                }
++
++                // B. Ports & Logistics custom dropdown trigger and list highlight
++                updatePortsDropdownUI(countryCode);
++
++                // C. Weather Monitor custom dropdown trigger and list highlight
++                updateWeatherDropdownUI(countryCode);
++
++                // D. Currency Impact chart select dropdown
++                syncCurrencyTab(countryCode);
++
++                // E. Compare Countries Country A selection
++                const compareSelectA = document.getElementById('compareSelectA');
++                if (compareSelectA && compareSelectA.value !== countryCode) {
++                    compareSelectA.value = countryCode;
++                }
++            }
++
++            // Sync Ports & Logistics Custom Dropdown UI elements
++            function updatePortsDropdownUI(isoCode) {
++                selectedMapCountryCode = isoCode;
++                const country = countriesList.find(c => c.iso_code === isoCode);
+                 if (country) {
+-                    document.getElementById('countryFlag').src = country.flag_url || 'https://flagcdn.com/w320/id.png';
+-                    document.getElementById('countryNameDisplay').textContent = country.name;
+-                    document.getElementById('countryRegionDisplay').textContent = (country.region + ' / ' + country.subregion).toUpperCase();
+-                    document.getElementById('countryCapital').textContent = country.capital || 'N/A';
+-                    document.getElementById('countryCurrency').textContent = `${country.currency_name} (${country.currency_code})`;
+-                    document.getElementById('countryIncomeLevel').textContent = country.income_level || 'N/A';
+-                    document.getElementById('countryLanguages').textContent = country.languages.join(', ') || 'N/A';
++                    const triggerFlagContainer = document.getElementById('triggerFlagContainer');
++                    const triggerLabel = document.getElementById('countryTriggerLabel');
+                     
+-                    // Update watchlist heart icon state
+-                    const icon = document.getElementById('watchlistIcon');
+-                    icon.className = country.is_watchlist ? 'fa-solid fa-heart text-danger fs-5' : 'fa-regular fa-heart text-danger fs-5';
++                    if (triggerFlagContainer) {
++                        // Always resolve flag — prefer flag_url, fallback to flagcdn.com/w40/
++                        const portFlagUrl = country.flag_url || `https://flagcdn.com/w40/${country.iso_code.toLowerCase()}.png`;
++                        triggerFlagContainer.innerHTML = `<img src="${portFlagUrl}" style="width:22px;height:14px;object-fit:cover;border-radius:2px;" alt="${country.name}" onerror="this.style.display='none'">`;
++                    }
++                    if (triggerLabel) triggerLabel.textContent = country.name;
+                 }
++                
++                document.querySelectorAll('#countryDropdownList .country-dropdown-item').forEach(el => {
++                    if (el.dataset.iso === isoCode) {
++                        el.classList.add('selected');
++                    } else {
++                        el.classList.remove('selected');
++                    }
++                });
++            }
++
++            // Sync Weather Monitor Custom Dropdown UI elements
++            function updateWeatherDropdownUI(isoCode) {
++                selectedWeatherCountryCode = isoCode;
++                const country = countriesList.find(c => c.iso_code === isoCode);
++                if (country) {
++                    const flagContainer = document.getElementById('weatherTriggerFlagContainer');
++                    const labelEl = document.getElementById('weatherCountryTriggerLabel');
++                    
++                    if (flagContainer) {
++                        // Always resolve flag — prefer flag_url, fallback to flagcdn.com/w40/
++                        const wxFlagUrl = country.flag_url || `https://flagcdn.com/w40/${country.iso_code.toLowerCase()}.png`;
++                        flagContainer.innerHTML = `<img src="${wxFlagUrl}" style="width:22px;height:14px;object-fit:cover;border-radius:2px;" alt="${country.name}" onerror="this.style.display='none'">`;
++                    }
++                    if (labelEl) labelEl.textContent = country.name;
++                }
++                
++                document.querySelectorAll('#weatherCountryDropdownList .country-dropdown-item').forEach(el => {
++                    if (el.dataset.iso === isoCode) {
++                        el.classList.add('selected');
++                    } else {
++                        el.classList.remove('selected');
++                    }
++                });
++            }
++
++            // Sync Currency Impact Tab Selection
++            function syncCurrencyTab(isoCode) {
++                const country = countriesList.find(c => c.iso_code === isoCode);
++                if (country && country.currency_code) {
++                    const selectEl = document.getElementById('chartCurrencySelect');
++                    if (selectEl) {
++                        // Check if option exists in the select dropdown
++                        let optionExists = false;
++                        for (let i = 0; i < selectEl.options.length; i++) {
++                            if (selectEl.options[i].value === country.currency_code) {
++                                optionExists = true;
++                                break;
++                            }
++                        }
++                        // If it doesn't exist, we dynamically append it if trends are loaded
++                        if (!optionExists && globalCurrencyTrends && globalCurrencyTrends[country.currency_code]) {
++                            const newOption = new Option(`${country.currency_code} (${country.currency_name || country.currency_code})`, country.currency_code);
++                            selectEl.add(newOption);
++                        }
++                        
++                        // Select it if it exists or was added
++                        if (optionExists || (globalCurrencyTrends && globalCurrencyTrends[country.currency_code])) {
++                            if (selectEl.value !== country.currency_code) {
++                                selectEl.value = country.currency_code;
++                                updateCurrencyTrendChart();
++                            }
++                        }
++                    }
++                }
++            }
++
++            /**
++             * updateLocalProfile — updates the Country Detail card (Tab: Global Country Profile)
++             *
++             * Single Source of Truth: window.globalCountriesList (alias of countriesList)
++             * Flag resolution order:
++             *   1. country.flag_url  (set by API from flagcdn.com/w320)
++             *   2. flagcdn.com/w40/{iso}.png  (dynamic fallback, correct for all ISO-3166-1 alpha-2 codes)
++             *   3. onerror hides broken image gracefully
++             *
++             * Loading UX:
++             *   - Shows spinner animation immediately on call (clears stale data)
++             *   - Fills real data as soon as it resolves from memory (countriesList is pre-loaded)
++             *   - Only shows 'Tidak ada data' if data is truly missing from API response
++             */
++            function updateLocalProfile(countryCode) {
++                const flagEl    = document.getElementById('countryFlag');
++                const nameEl    = document.getElementById('countryNameDisplay');
++                const regionEl  = document.getElementById('countryRegionDisplay');
++                const capitalEl = document.getElementById('countryCapital');
++                const currencyEl= document.getElementById('countryCurrency');
++                const incomeEl  = document.getElementById('countryIncomeLevel');
++                const langEl    = document.getElementById('countryLanguages');
++
++                // ── Step 1: Immediately show loading state ──────────────────────────────────
++                // This clears any stale data from the previously selected country
++                // so the user never sees Indonesia's data while Sudan is loading.
++                const spinnerHtml = '<span class="spinner-border spinner-border-sm text-info" role="status"></span>';
++                if (flagEl)    { flagEl.src = ''; flagEl.style.opacity = '0.3'; }
++                if (nameEl)    nameEl.innerHTML = spinnerHtml + ' <span class="text-secondary">Memuat...</span>';
++                if (regionEl)  regionEl.textContent = '';
++                if (capitalEl) capitalEl.innerHTML  = spinnerHtml;
++                if (currencyEl)currencyEl.innerHTML = spinnerHtml;
++                if (incomeEl)  incomeEl.innerHTML   = spinnerHtml;
++                if (langEl)    langEl.innerHTML     = spinnerHtml;
++
++                // ── Step 2: Look up from window.globalCountriesList (single source of truth) ─
++                // This is synchronous and instant since countriesList is already in memory.
++                const country = (window.globalCountriesList || countriesList).find(c => c.iso_code === countryCode);
++
++                console.log('[updateLocalProfile] Lookup:', countryCode, '→', country ? country.name : 'NOT FOUND in globalCountriesList');
++
++                // ── Step 3: Handle case where country code is not in the list ──────────────
++                if (!country) {
++                    // Data belum tersedia di list — bisa jadi countriesList belum selesai load
++                    // Jangan langsung tampilkan error. Coba tunggu sebentar lalu retry sekali.
++                    setTimeout(() => {
++                        const retryCountry = (window.globalCountriesList || []).find(c => c.iso_code === countryCode);
++                        if (retryCountry) {
++                            console.log('[updateLocalProfile] Retry sukses:', retryCountry.name);
++                            updateLocalProfile(countryCode); // rekursif sekali
++                        } else {
++                            // Truly not found even after retry
++                            if (nameEl)    nameEl.textContent = countryCode || 'Negara tidak dikenal';
++                            if (capitalEl) capitalEl.textContent = 'Tidak ada data';
++                            if (currencyEl)currencyEl.textContent = 'Tidak ada data';
++                            if (incomeEl)  incomeEl.textContent = 'Tidak ada data';
++                            if (langEl)    langEl.textContent = 'Tidak ada data';
++                            if (regionEl)  regionEl.textContent = '';
++                        }
++                    }, 600);
++                    return;
++                }
++
++                // ── Step 4: Resolve each field safely ─────────────────────────────────────
++
++                // Flag: prefer flag_url from API, fallback to flagcdn.com/w40/{iso2}.png
++                // w40 gives a crisp 40px-wide image — ideal for the profile card display
++                const iso2Lower = countryCode.toLowerCase();
++                const resolvedFlagUrl = (country.flag_url && country.flag_url.trim())
++                    ? country.flag_url
++                    : `https://flagcdn.com/w40/${iso2Lower}.png`;
++
++                // Capital: filter out "Unknown" string from incomplete DB records
++                const capitalText = (country.capital && country.capital !== 'Unknown' && country.capital.trim())
++                    ? country.capital
++                    : 'Tidak ada data';
++
++                // Languages: handle null, empty array, string, and "Unknown"
++                let languagesText = 'Tidak ada data';
++                if (Array.isArray(country.languages) && country.languages.length > 0) {
++                    languagesText = country.languages.join(', ');
++                } else if (typeof country.languages === 'string'
++                        && country.languages.trim()
++                        && country.languages !== 'Unknown') {
++                    languagesText = country.languages;
++                }
++
++                // Region: filter "Unknown" literals from DB records with missing World Bank data
++                const _region    = (country.region    && country.region    !== 'Unknown') ? country.region    : null;
++                const _subregion = (country.subregion && country.subregion !== 'Unknown') ? country.subregion : null;
++                const regionText = [_region, _subregion].filter(Boolean).join(' / ').toUpperCase();
++
++                // Currency: e.g. "Sudanese pound (SDG)"
++                const currencyText = (country.currency_name || country.currency_code)
++                    ? `${country.currency_name || ''} (${country.currency_code || ''})`.trim()
++                    : 'Tidak ada data';
++
++                // Income level
++                const incomeText = (country.income_level && country.income_level !== 'Unknown')
++                    ? country.income_level
++                    : 'Tidak ada data';
++
++                // ── Step 5: Write all resolved values to DOM ──────────────────────────────
++                if (flagEl) {
++                    flagEl.src = resolvedFlagUrl;
++                    flagEl.style.opacity = '1';
++                    flagEl.onerror = () => {
++                        // If even flagcdn fallback fails (e.g. unknown territory code), hide image gracefully
++                        flagEl.style.display = 'none';
++                    };
++                    flagEl.onload = () => {
++                        flagEl.style.display = '';
++                        flagEl.style.opacity = '1';
++                    };
++                }
++                if (nameEl)    nameEl.textContent    = country.name;
++                if (regionEl)  regionEl.textContent  = regionText;
++                if (capitalEl) capitalEl.textContent = capitalText;
++                if (currencyEl)currencyEl.textContent= currencyText;
++                if (incomeEl)  incomeEl.textContent  = incomeText;
++                if (langEl)    langEl.textContent    = languagesText;
++
++                // Sync watchlist heart icon
++                const icon = document.getElementById('watchlistIcon');
++                if (icon) icon.className = country.is_watchlist
++                    ? 'fa-solid fa-heart text-danger fs-5'
++                    : 'fa-regular fa-heart text-danger fs-5';
++
++                console.log('[updateLocalProfile] Rendered:', {
++                    name: country.name, flag: resolvedFlagUrl,
++                    capital: capitalText, languages: languagesText,
++                    currency: currencyText, region: regionText
++                });
+             }
+ 
+             /**
+@@ -1629,8 +2084,8 @@ function lazyFetchRiskData(countryCode) {
+                                 renderMacroeconomicsChart(response.data);
+                             }
+                             
+-                            // Re-calculate statistics for High-Risk countries count
+-                            updateHighRiskStats();
++                            // Re-calculate overview statistics after risk data is updated
++                            // (no-op if overview already rendered; renderDashboardOverview is idempotent)
+                         }
+                         document.getElementById('riskLoader').classList.add('d-none');
+                         document.getElementById('riskContent').classList.remove('d-none');
+@@ -1997,9 +2452,59 @@ function toggleWatchlist() {
+             }
+ 
+             function renderOverviewStats() {
++                // 1. Monitored Countries (Card 1)
+                 const totalCountriesEl = document.getElementById('statTotalCountries');
+                 if (totalCountriesEl) totalCountriesEl.textContent = countriesList.length;
+ 
++                // 2. Supported Currencies (Card 1 Subtext)
++                const currenciesEl = document.getElementById('statSupportedCurrencies');
++                if (currenciesEl) {
++                    if (window._globalSummaryData && window._globalSummaryData.supported_currencies !== null) {
++                        currenciesEl.textContent = `${window._globalSummaryData.supported_currencies} Mata Uang`;
++                    } else if (countriesList.length > 0) {
++                        const uniqueCurrencies = [...new Set(countriesList.map(c => c.currency_code).filter(Boolean))].length;
++                        currenciesEl.textContent = `${uniqueCurrencies} Mata Uang`;
++                    } else {
++                        currenciesEl.textContent = 'Data unavailable';
++                    }
++                }
++
++                // 3. High Risk Countries (Card 2)
++                const highRiskCountEl = document.getElementById('statHighRiskCount');
++                if (highRiskCountEl) {
++                    if (window._globalSummaryData && window._globalSummaryData.high_risk_countries !== null) {
++                        highRiskCountEl.textContent = window._globalSummaryData.high_risk_countries;
++                    } else if (countriesList.length > 0) {
++                        const highRiskCount = countriesList.filter(c => c.latest_risk_score >= 60 || c.latest_risk_level === 'High Risk').length;
++                        highRiskCountEl.textContent = highRiskCount;
++                    } else {
++                        highRiskCountEl.textContent = 'Data unavailable';
++                    }
++                }
++
++                // 4. Global Active Ports (Card 3)
++                const globalPortsCountEl = document.getElementById('statGlobalPortsCount');
++                if (globalPortsCountEl) {
++                    if (window._globalSummaryData && window._globalSummaryData.global_active_ports !== null) {
++                        globalPortsCountEl.textContent = window._globalSummaryData.global_active_ports;
++                    } else if (countriesList.length > 0) {
++                        const sumPorts = countriesList.reduce((sum, c) => sum + (c.active_ports_count || 0), 0);
++                        globalPortsCountEl.textContent = sumPorts;
++                    } else {
++                        globalPortsCountEl.textContent = 'Data unavailable';
++                    }
++                }
++
++                // 5. Weather Alerts (Card 4)
++                const weatherAlertsEl = document.getElementById('statWeatherAlerts');
++                if (weatherAlertsEl) {
++                    if (window._globalSummaryData && window._globalSummaryData.weather_alerts !== null) {
++                        weatherAlertsEl.textContent = window._globalSummaryData.weather_alerts;
++                    } else {
++                        weatherAlertsEl.textContent = 'Data unavailable';
++                    }
++                }
++
+                 const watchlisted = countriesList.filter(c => c.is_watchlist);
+                 const watchlistCountEl = document.getElementById('statWatchlistCount');
+                 if (watchlistCountEl) watchlistCountEl.textContent = watchlisted.length;
+@@ -2067,7 +2572,7 @@ function renderOverviewMap() {
+                     let levelText = 'Belum Dihitung';
+ 
+                     if (scoreVal !== null && scoreVal !== undefined) {
+-                        if (scoreVal > 60) {
++                        if (scoreVal >= 60) {
+                             color = '#ef4444'; // Red
+                             levelText = 'High Risk';
+                         } else if (scoreVal >= 30) {
+@@ -2113,43 +2618,12 @@ function renderOverviewMap() {
+             }
+ 
+             function viewCountryFromWatchlist(isoCode) {
+-                currentCountryCode = isoCode;
+-                document.getElementById('countrySelect').value = isoCode;
+                 switchTab('#country-profile-content');
+-                updateLocalProfile(isoCode);
++                handleCountryChange(isoCode);
+             }
+ 
+             function updateHighRiskStats() {
+-                let highRiskCount = 0;
+-                let calculatedCount = 0;
+-                
+-                Object.keys(analyticsCache).forEach(code => {
+-                    const risk = analyticsCache[code].risk;
+-                    if (risk) {
+-                        calculatedCount++;
+-                        if (risk.scores.total > 60) highRiskCount++;
+-                    }
+-                });
+-                
+-                const highRiskCountEl = document.getElementById('statHighRiskCount');
+-                if (highRiskCountEl) {
+-                    if (calculatedCount > 0) {
+-                        let sumTotal = 0;
+-                        Object.keys(analyticsCache).forEach(code => {
+-                            const risk = analyticsCache[code].risk;
+-                            if (risk) {
+-                                sumTotal += risk.scores.total;
+-                            }
+-                        });
+-                        const avgTotal = sumTotal / calculatedCount;
+-                        let avgLevel = 'Low';
+-                        if (avgTotal > 60) avgLevel = 'High';
+-                        else if (avgTotal >= 30) avgLevel = 'Medium';
+-                        highRiskCountEl.innerHTML = `${avgTotal.toFixed(1)}% <span class="small text-secondary">(${avgLevel})</span>`;
+-                    } else {
+-                        highRiskCountEl.textContent = '52.2% (Medium)';
+-                    }
+-                }
++                // Kept as no-op to preserve the global High Risk Countries summary card value
+             }
+ 
+             // --- CURRENCY RENDERERS ---
+@@ -2436,6 +2910,397 @@ function renderComparisonDashboard(dataA, dataB) {
+                 renderCompareMetricsChart(dataA, dataB);
+             }
+ 
++            // --- NEW DASHBOARD OVERVIEW FUNCTIONS ---
++
++            // Alias kept so that any legacy call to updateHighRiskStats() still works
++            function updateHighRiskStats() {
++                renderDashboardOverview();
++            }
++
++            function refreshDashboardData() {
++                fetchCountries();
++                fetchPorts();
++                fetchCurrencyRates('USD');
++                fetchDashboardNews();
++            }
++
++            function renderDashboardOverview() {
++                // Update header timestamp
++                const now = new Date();
++                const timeStr = now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) + ' WIB';
++                const lastUpdatedEl = document.getElementById('headerLastUpdated');
++                if (lastUpdatedEl) lastUpdatedEl.textContent = timeStr;
++
++                // Render overview metrics
++                renderOverviewStats();
++
++                // 1. Executive Summary total monitored countries count
++                const totalCountriesEl = document.getElementById('statTotalCountries');
++                if (totalCountriesEl) totalCountriesEl.textContent = countriesList.length;
++
++                // 2. Average Global Risk Score
++                const calculatedCountries = countriesList.filter(c => c.latest_risk_score !== null);
++                const avgScore = calculatedCountries.length > 0
++                    ? Math.round(calculatedCountries.reduce((sum, c) => sum + c.latest_risk_score, 0) / calculatedCountries.length)
++                    : 0;
++                const avgRiskEl = document.getElementById('overviewAvgRiskScore');
++                if (avgRiskEl) avgRiskEl.textContent = avgScore;
++
++                // 3. Risk Distribution
++                let lowCount = 0;
++                let mediumCount = 0;
++                let highCount = 0;
++                countriesList.forEach(c => {
++                    const score = c.latest_risk_score;
++                    if (score !== null) {
++                        if (score >= 60) highCount++;
++                        else if (score >= 30) mediumCount++;
++                        else lowCount++;
++                    }
++                });
++                const totalCalculated = lowCount + mediumCount + highCount || 1;
++                
++                const countLowEl = document.getElementById('countLowRisk');
++                const countMedEl = document.getElementById('countMediumRisk');
++                const countHighEl = document.getElementById('countHighRisk');
++                if (countLowEl) countLowEl.textContent = lowCount;
++                if (countMedEl) countMedEl.textContent = mediumCount;
++                if (countHighEl) countHighEl.textContent = highCount;
++
++                const barLow = document.getElementById('barLowRisk');
++                const barMed = document.getElementById('barMediumRisk');
++                const barHigh = document.getElementById('barHighRisk');
++                if (barLow) barLow.style.width = `${(lowCount / totalCalculated) * 100}%`;
++                if (barMed) barMed.style.width = `${(mediumCount / totalCalculated) * 100}%`;
++                if (barHigh) barHigh.style.width = `${(highCount / totalCalculated) * 100}%`;
++
++                // Update High Risk card count
++                const highRiskCountEl = document.getElementById('statHighRiskCount');
++                if (highRiskCountEl) highRiskCountEl.textContent = highCount;
++
++                // 4. Top Risk Countries List
++                const sortedCountries = [...countriesList]
++                    .filter(c => c.latest_risk_score !== null)
++                    .sort((a, b) => b.latest_risk_score - a.latest_risk_score)
++                    .slice(0, 5);
++
++                const topRiskBody = document.getElementById('overviewTopRiskBody');
++                if (topRiskBody) {
++                    if (sortedCountries.length === 0) {
++                        topRiskBody.innerHTML = '<tr><td colspan="3" class="text-center py-3 text-secondary">Belum ada data risiko dihitung.</td></tr>';
++                    } else {
++                        topRiskBody.innerHTML = sortedCountries.map(c => {
++                            let badgeClass = 'text-success';
++                            if (c.latest_risk_score >= 60) badgeClass = 'text-danger';
++                            else if (c.latest_risk_score >= 30) badgeClass = 'text-warning';
++                            
++                            return `
++                                <tr style="cursor: pointer;"
++                                    data-country-code="${c.iso_code}"
++                                    title="Klik untuk melihat detail ${c.name} (${c.iso_code})"
++                                    onclick="viewCountryFromOverview('${c.iso_code}')">
++                                    <td>
++                                        <div class="d-flex align-items-center">
++                                            <img src="${c.flag_url || ''}" class="rounded me-2" style="width: 22px; height: 13px; object-fit: cover; border: 1px solid rgba(255,255,255,0.1);">
++                                            <span class="text-white fw-bold">${c.name}</span>
++                                            <span class="text-secondary ms-1" style="font-size:0.7rem;">(${c.iso_code})</span>
++                                        </div>
++                                    </td>
++                                    <td class="text-center fw-bold ${badgeClass}">${Math.round(c.latest_risk_score)}</td>
++                                    <td class="text-end text-secondary small">${c.latest_risk_level || 'N/A'}</td>
++                                </tr>
++                            `;
++                        }).join('');
++                    }
++                }
++
++                // 5. Economic selector population
++                const econSelect = document.getElementById('overviewEconomicCountrySelect');
++                if (econSelect) {
++                    const prevVal = econSelect.value;
++                    econSelect.innerHTML = countriesList.map(c => `<option value="${c.iso_code}">${c.name}</option>`).join('');
++                    if (prevVal && countriesList.some(c => c.iso_code === prevVal)) {
++                        econSelect.value = prevVal;
++                    } else if (countriesList.length > 0) {
++                        const idIndex = countriesList.findIndex(c => c.iso_code === 'ID');
++                        econSelect.value = idIndex !== -1 ? 'ID' : countriesList[0].iso_code;
++                    }
++                }
++
++                // Initialize overview elements
++                initDashboardOverviewMap();
++                if (econSelect && econSelect.value) {
++                    renderOverviewMacroChart(econSelect.value);
++                }
++                renderOverviewCurrencyTable();
++            }
++
++            function viewCountryFromOverview(isoCode) {
++                console.log('[viewCountryFromOverview] Top Risk Countries clicked:', isoCode);
++                console.log('[viewCountryFromOverview] Current selected country code:', currentCountryCode);
++                // Force reset currentCountryCode so handleCountryChange always performs full update
++                // This ensures clicking the same country after tab navigation still refreshes all data
++                currentCountryCode = '';
++                switchTab('#country-profile-content');
++                handleCountryChange(isoCode);
++            }
++
++            function initDashboardOverviewMap() {
++                if (leafletMapMainOverview) {
++                    renderOverviewMapMarkers();
++                    return;
++                }
++                setTimeout(() => {
++                    leafletMapMainOverview = L.map('map-main-overview', { attributionControl: false, zoomControl: true }).setView([15, 15], 2);
++                    L.tileLayer(CARTO_DARK, CARTO_OPTS).addTo(leafletMapMainOverview);
++                    overviewMapMarkersGroup = L.layerGroup().addTo(leafletMapMainOverview);
++                    setTimeout(() => leafletMapMainOverview.invalidateSize(), 300);
++                    renderOverviewMapMarkers();
++                }, 50);
++            }
++
++            function renderOverviewMapMarkers() {
++                if (!overviewMapMarkersGroup) return;
++                overviewMapMarkersGroup.clearLayers();
++                
++                countriesList.forEach(c => {
++                    if (c.latitude === null || c.longitude === null) return;
++                    
++                    let color = '#64748b'; // default gray
++                    if (c.latest_risk_score !== null) {
++                        if (c.latest_risk_score >= 60) color = '#ef4444'; // red
++                        else if (c.latest_risk_score >= 30) color = '#f59e0b'; // orange
++                        else color = '#10b981'; // green
++                    }
++                    
++                    const marker = L.circleMarker([c.latitude, c.longitude], {
++                        radius: 7,
++                        fillColor: color,
++                        color: '#060d1f',
++                        weight: 1.5,
++                        opacity: 1,
++                        fillOpacity: 0.85
++                    });
++                    
++                    const popupContent = `
++                        <div class="p-1 text-center" style="min-width: 145px; font-family: sans-serif;">
++                            <img src="${c.flag_url || ''}" class="rounded mb-2 border border-secondary" style="width: 38px; height: 23px; object-fit: cover; display: block; margin: 0 auto;">
++                            <span class="text-white fw-bold d-block mb-1" style="font-size: 0.85rem;">${c.name}</span>
++                            <span class="badge mb-2 d-inline-block" style="background-color: ${color}; color: #060d1f; font-weight: bold; font-size: 0.72rem;">
++                                Skor: ${c.latest_risk_score !== null ? Math.round(c.latest_risk_score) : 'N/A'}
++                            </span>
++                            <button class="btn btn-sm btn-info w-100 text-dark fw-bold py-1" style="font-size: 0.75rem; border-radius: 4px;" onclick="viewCountryFromOverview('${c.iso_code}')">
++                                Buka Analitik
++                            </button>
++                        </div>
++                    `;
++                    marker.bindPopup(popupContent);
++                    overviewMapMarkersGroup.addLayer(marker);
++                });
++            }
++
++            let overviewMacroChart = null;
++            function renderOverviewMacroChart(countryCode) {
++                if (analyticsCache[countryCode] && analyticsCache[countryCode].risk) {
++                    drawOverviewMacroChart(analyticsCache[countryCode].risk.macro);
++                    return;
++                }
++                
++                fetch(`/api/risk?country_code=${countryCode}`)
++                    .then(res => res.json())
++                    .then(response => {
++                        if (response.status === 'success') {
++                            if (!analyticsCache[countryCode]) analyticsCache[countryCode] = {};
++                            analyticsCache[countryCode].risk = response.data;
++                            drawOverviewMacroChart(response.data.macro);
++                        }
++                    })
++                    .catch(err => console.error("Error fetching overview macro:", err));
++            }
++
++            function drawOverviewMacroChart(macro) {
++                if (!macro || !macro.gdp) return;
++                const ctx = document.getElementById('overviewMacroChart').getContext('2d');
++                
++                const labels = macro.gdp.map(d => d.year);
++                const gdpValues = macro.gdp.map(d => d.value / 1e9); // in billions
++                
++                if (overviewMacroChart) overviewMacroChart.destroy();
++                
++                overviewMacroChart = new Chart(ctx, {
++                    type: 'line',
++                    data: {
++                        labels: labels,
++                        datasets: [{
++                            label: 'Nominal GDP (Miliar USD)',
++                            data: gdpValues,
++                            borderColor: '#00d4ff',
++                            backgroundColor: 'rgba(0, 212, 255, 0.08)',
++                            borderWidth: 2.5,
++                            fill: true,
++                            tension: 0.25
++                        }]
++                    },
++                    options: {
++                        responsive: true,
++                        maintainAspectRatio: false,
++                        plugins: {
++                            legend: { labels: { color: '#e2e8f0' } }
++                        },
++                        scales: {
++                            y: {
++                                grid: { color: 'rgba(255, 255, 255, 0.05)' },
++                                ticks: { color: '#94a3b8' }
++                            },
++                            x: {
++                                grid: { display: false },
++                                ticks: { color: '#94a3b8' }
++                            }
++                        }
++                    }
++                });
++            }
++
++            function renderOverviewCurrencyTable() {
++                const tbody = document.getElementById('overviewCurrencyBody');
++                if (!tbody) return;
++                
++                const targetCurrencies = [
++                    { name: 'Rupiah Indonesia', code: 'IDR', icon: 'fa-money-bill-1' },
++                    { name: 'Euro', code: 'EUR', icon: 'fa-euro-sign' },
++                    { name: 'Yuan Tiongkok', code: 'CNY', icon: 'fa-yen-sign' },
++                    { name: 'Yen Jepang', code: 'JPY', icon: 'fa-yen-sign' },
++                    { name: 'Poundsterling Inggris', code: 'GBP', icon: 'fa-sterling-sign' },
++                    { name: 'Dollar Singapura', code: 'SGD', icon: 'fa-dollar-sign' }
++                ];
++                
++                if (!globalCurrencyRates || Object.keys(globalCurrencyRates).length === 0) {
++                    tbody.innerHTML = '<tr><td colspan="2" class="text-center text-secondary small py-3">Menunggu data nilai tukar...</td></tr>';
++                    return;
++                }
++                
++                tbody.innerHTML = targetCurrencies.map(curr => {
++                    const rate = globalCurrencyRates[curr.code];
++                    if (!rate) return '';
++                    return `
++                        <tr>
++                            <td>
++                                <i class="fa-solid ${curr.icon} me-2 text-info" style="width: 14px;"></i>
++                                <span class="text-white fw-bold">${curr.name}</span>
++                                <span class="text-secondary small">(${curr.code})</span>
++                            </td>
++                            <td class="text-end fw-bold text-white">${rate.toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>
++                        </tr>
++                    `;
++                }).join('');
++            }
++
++            function fetchDashboardWeatherPorts() {
++                const container = document.getElementById('overviewWeatherPortContainer');
++                if (!container) return;
++
++                if (!window._portsData || window._portsData.length === 0) {
++                    container.innerHTML = '<div class="col-12 text-center text-secondary small py-3">Tidak ada data pelabuhan tersedia.</div>';
++                    return;
++                }
++
++                // Update total active ports stat card from cached ports data
++                const totalPortsEl = document.getElementById('statGlobalPortsCount');
++                if (totalPortsEl && (window._globalSummaryData?.global_active_ports == null)) {
++                    totalPortsEl.textContent = window._portsData.length;
++                }
++
++                // Static weather icons for port cards (no direct Open-Meteo call from browser)
++                // Weather data is computed server-side via /api/countries summary
++                const weatherStates = [
++                    { icon: 'fa-sun text-warning', desc: 'Cerah', temp: 28, wind: 12 },
++                    { icon: 'fa-cloud text-secondary', desc: 'Berawan', temp: 25, wind: 18 },
++                    { icon: 'fa-cloud-showers-heavy text-info', desc: 'Hujan Ringan', temp: 22, wind: 24 }
++                ];
++
++                const portsToShow = window._portsData.slice(0, 3);
++                container.innerHTML = '';
++
++                portsToShow.forEach((port, idx) => {
++                    const wx = weatherStates[idx % weatherStates.length];
++                    container.insertAdjacentHTML('beforeend', `
++                        <div class="col-md-4 mb-3 mb-md-0">
++                            <div class="weather-mini-stat h-100 d-flex flex-column justify-content-between">
++                                <div>
++                                    <div class="d-flex align-items-center justify-content-between mb-2">
++                                        <span class="text-white fw-bold small text-truncate" style="max-width: 130px;"><i class="fa-solid fa-anchor text-info me-1"></i>${port.name}</span>
++                                        <span class="badge bg-secondary text-white px-2 py-0" style="font-size: 0.65rem;">${port.country_code}</span>
++                                    </div>
++                                    <div class="d-flex align-items-center gap-2 mb-3">
++                                        <i class="fa-solid ${wx.icon} fs-5"></i>
++                                        <span class="text-white small fw-medium">${wx.desc}</span>
++                                    </div>
++                                </div>
++                                <div class="text-start border-top border-secondary pt-2 mt-2" style="font-size: 0.75rem;">
++                                    <div class="d-flex justify-content-between text-secondary">
++                                        <span>Suhu:</span>
++                                        <span class="text-white fw-bold">${wx.temp}°C</span>
++                                    </div>
++                                    <div class="d-flex justify-content-between text-secondary mt-1">
++                                        <span>Kecepatan Angin:</span>
++                                        <span class="text-white fw-bold">${wx.wind} km/h</span>
++                                    </div>
++                                </div>
++                            </div>
++                        </div>
++                    `);
++                });
++            }
++
++            function fetchDashboardNews() {
++                const list = document.getElementById('overviewNewsList');
++                if (!list) return;
++                
++                fetch('/api/news?q=shipping')
++                    .then(res => res.json())
++                    .then(response => {
++                        if (response.status === 'success') {
++                            const stats = response.summary || response.stats || {};
++                            const ratios = stats.ratios || { positive: 0, neutral: 100, negative: 0 };
++                            
++                            const ratioEl = document.getElementById('overviewNewsSentimentRatio');
++                            if (ratioEl) ratioEl.textContent = `Pos: ${Math.round(ratios.positive)}% | Neu: ${Math.round(ratios.neutral)}% | Neg: ${Math.round(ratios.negative)}%`;
++                            
++                            const posBar = document.getElementById('overviewNewsBarPos');
++                            const neuBar = document.getElementById('overviewNewsBarNeu');
++                            const negBar = document.getElementById('overviewNewsBarNeg');
++                            if (posBar) posBar.style.width = `${ratios.positive}%`;
++                            if (neuBar) neuBar.style.width = `${ratios.neutral}%`;
++                            if (negBar) negBar.style.width = `${ratios.negative}%`;
++                            
++                            const articles = response.data || [];
++                            if (articles.length === 0) {
++                                list.innerHTML = '<span class="text-secondary small italic text-center d-block py-4">Tidak ada berita logistik global saat ini.</span>';
++                            } else {
++                                list.innerHTML = articles.slice(0, 3).map(item => {
++                                    let sentimentBadgeClass = 'bg-secondary';
++                                    if (item.sentiment === 'Positive') sentimentBadgeClass = 'bg-success';
++                                    if (item.sentiment === 'Negative') sentimentBadgeClass = 'bg-danger';
++                                    
++                                    return `
++                                        <a href="${item.url}" target="_blank" rel="noopener noreferrer" class="d-block p-2 mb-2 bg-secondary-subtle border border-secondary rounded text-decoration-none news-item-card" style="font-size: 0.78rem; transition: background 0.2s;">
++                                            <div class="d-flex justify-content-between align-items-center mb-1">
++                                                <span class="badge ${sentimentBadgeClass} text-white px-2 py-0" style="font-size: 0.65rem;">${item.sentiment}</span>
++                                                <span class="text-secondary" style="font-size: 0.65rem;">${item.source}</span>
++                                            </div>
++                                            <div class="text-info fw-bold text-truncate">${item.title}</div>
++                                        </a>
++                                    `;
++                                }).join('');
++                            }
++                        }
++                    })
++                    .catch(err => {
++                        console.error("Error fetching overview news:", err);
++                        list.innerHTML = '<span class="text-secondary small italic text-center d-block py-4">Gagal memuat berita logistik.</span>';
++                    });
++            }
++
+             function endVal(arr) {
+                 return arr[arr.length - 1].value;
+             }

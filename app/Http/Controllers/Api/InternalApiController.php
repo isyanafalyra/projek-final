@@ -418,9 +418,9 @@ class InternalApiController extends Controller
         $q = trim($request->query('q', ''));
 
         if (empty($q)) {
-            $query = 'logistik rantai pasok ekspor impor';
+            $query = 'global supply chain OR logistics OR shipping OR freight OR trade OR port';
         } else {
-            $query = $q . ' (logistik OR ekonomi OR ekspor OR impor)';
+            $query = $q . ' (supply chain OR logistics OR shipping OR freight OR trade OR port)';
         }
 
         $articles = $this->apiService->getNewsData($query);
