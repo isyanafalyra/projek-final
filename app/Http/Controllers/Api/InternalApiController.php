@@ -43,11 +43,17 @@ class InternalApiController extends Controller
             ->groupBy('country_id')
             ->pluck('count', 'country_id');
 
-        $data = $countries->map(function ($country) use ($user, $portCounts) {
+        // Pre-load latest risk score per country to fix N+1
+        $latestRiskIds = RiskScore::selectRaw('MAX(id) as id')
+            ->groupBy('country_id')
+            ->pluck('id');
+        $latestRisks = RiskScore::whereIn('id', $latestRiskIds)
+            ->get()
+            ->keyBy('country_id');
+
+        $data = $countries->map(function ($country) use ($user, $portCounts, $latestRisks) {
             $details = $this->apiService->getCountryDetails($country->iso_code);
-            $latestRisk = RiskScore::where('country_id', $country->id)
-                ->orderBy('calculated_at', 'desc')
-                ->first();
+            $latestRisk = $latestRisks[$country->id] ?? null;
 
             $isWatchlisted = false;
             if ($user) {

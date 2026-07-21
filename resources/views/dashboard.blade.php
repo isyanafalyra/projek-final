@@ -1455,7 +1455,7 @@
                 }
 
                 // Show shared Country selection card only for country-specific views
-                const countrySpecificTabs = ['#country-profile-content', '#risk-scoring-content', '#data-visualization-content'];
+                const countrySpecificTabs = ['#country-profile-content', '#risk-scoring-content', '#news-feed-content', '#data-visualization-content'];
                 const selectorEl = document.getElementById('sharedCountrySelector');
                 if (countrySpecificTabs.includes(targetSelector)) {
                     selectorEl.classList.remove('d-none');
@@ -2043,14 +2043,13 @@
             }
 
             function handleLazyLoadForActiveTab(tabSelector) {
-                if (tabSelector === '#news-feed-content') {
-                    lazyFetchNewsData();
-                    return;
-                }
+
                 if (!currentCountryCode) return;
                 
                 if (tabSelector === '#risk-scoring-content') {
                     lazyFetchRiskData(currentCountryCode);
+                } else if (tabSelector === '#news-feed-content') {
+                    lazyFetchNewsData(currentCountryCode);
                 } else if (tabSelector === '#data-visualization-content') {
                     lazyFetchRiskData(currentCountryCode); // GDP/Inflation macro-metrics come from risk API
                 }
@@ -2101,21 +2100,25 @@
                     });
             }
 
-            // Lazy fetch GNews RSS Feed + lexicon analysis (Global)
-            function lazyFetchNewsData() {
-                if (window._globalNewsData) {
-                    renderNewsIntelligence(window._globalNewsData);
+            // Lazy fetch GNews RSS Feed + lexicon analysis
+            function lazyFetchNewsData(countryCode) {
+                if (analyticsCache[countryCode] && analyticsCache[countryCode].news) {
+                    renderNewsIntelligence(analyticsCache[countryCode].news);
                     return;
                 }
+
+                const country = countriesList.find(c => c.iso_code === countryCode);
+                const query = country ? country.name : '';
 
                 document.getElementById('newsLoader').classList.remove('d-none');
                 document.getElementById('newsContent').classList.add('d-none');
 
-                fetch('/api/news')
+                fetch(`/api/news?q=${query}`)
                     .then(res => res.json())
                     .then(response => {
                         if (response.status === 'success') {
-                            window._globalNewsData = response;
+                            if (!analyticsCache[countryCode]) analyticsCache[countryCode] = {};
+                            analyticsCache[countryCode].news = response;
                             
                             const activeTab = document.querySelector('.tab-pane.active').id;
                             if (activeTab === 'news-feed-content') {
@@ -3254,7 +3257,7 @@
                 const list = document.getElementById('overviewNewsList');
                 if (!list) return;
                 
-                fetch('/api/news')
+                fetch('/api/news?q=shipping')
                     .then(res => res.json())
                     .then(response => {
                         if (response.status === 'success') {
@@ -3275,31 +3278,19 @@
                             if (articles.length === 0) {
                                 list.innerHTML = '<span class="text-secondary small italic text-center d-block py-4">Tidak ada berita logistik global saat ini.</span>';
                             } else {
-                                list.innerHTML = articles.slice(0, 5).map(item => {
+                                list.innerHTML = articles.slice(0, 3).map(item => {
                                     let sentimentBadgeClass = 'bg-secondary';
                                     if (item.sentiment === 'Positive') sentimentBadgeClass = 'bg-success';
                                     if (item.sentiment === 'Negative') sentimentBadgeClass = 'bg-danger';
                                     
-                                    const pubDate = item.published_at ? new Date(item.published_at).toLocaleDateString('id-ID', {
-                                        day: '2-digit',
-                                        month: 'short',
-                                        year: 'numeric'
-                                    }) : 'N/A';
-                                    
                                     return `
-                                        <div class="d-block p-3 mb-2 bg-secondary-subtle border border-secondary rounded news-item-card" style="font-size: 0.78rem;">
-                                            <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-1">
-                                                <span class="badge ${sentimentBadgeClass} text-white px-2 py-0.5 rounded" style="font-size: 0.65rem;">Sentimen: ${item.sentiment} (${item.sentiment_score})</span>
-                                                <span class="text-secondary" style="font-size: 0.65rem;">${item.source} • ${pubDate}</span>
+                                        <a href="${item.url}" target="_blank" rel="noopener noreferrer" class="d-block p-2 mb-2 bg-secondary-subtle border border-secondary rounded text-decoration-none news-item-card" style="font-size: 0.78rem; transition: background 0.2s;">
+                                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                                <span class="badge ${sentimentBadgeClass} text-white px-2 py-0" style="font-size: 0.65rem;">${item.sentiment}</span>
+                                                <span class="text-secondary" style="font-size: 0.65rem;">${item.source}</span>
                                             </div>
-                                            <div class="text-info fw-bold mb-1" style="font-size: 0.85rem;">${item.title}</div>
-                                            <p class="text-secondary mb-2 small" style="line-height: 1.4; font-size: 0.75rem;">${item.description ? item.description.substring(0, 150) + '...' : ''}</p>
-                                            <div class="text-end">
-                                                <a href="${item.url}" target="_blank" rel="noopener noreferrer" class="text-info small fw-bold text-decoration-none" style="font-size: 0.7rem;">
-                                                    <i class="fa-solid fa-arrow-up-right-from-square me-1"></i> Kunjungi Sumber
-                                                </a>
-                                            </div>
-                                        </div>
+                                            <div class="text-info fw-bold text-truncate">${item.title}</div>
+                                        </a>
                                     `;
                                 }).join('');
                             }
